@@ -12,31 +12,23 @@
 
 *{ box-sizing:border-box; }
 html,body{ height:100%; }
+
 body{
   margin:0;
-  font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto;
+  font-family: system-ui,-apple-system,Segoe UI,Roboto;
   background:var(--bg);
   color:var(--text);
 }
 
-.wrap{ max-width:1200px; margin:0 auto; padding:18px; }
-
-.top{
-  display:flex;
-  align-items:flex-end;
-  justify-content:space-between;
-  gap:16px;
-  margin-bottom:12px;
-}
-h1{ margin:0; font-size:22px; }
-.status{ color:var(--muted); font-size:13px; }
+.wrap{ max-width:1400px; margin:0 auto; padding:18px; }
 
 .grid{
   display:grid;
-  grid-template-columns: 380px 1fr;
-  gap:14px;
-  align-items:start;
+  grid-template-columns: 420px 1fr;
+  gap:16px;
 }
+
+/* ---------- CARDS ---------- */
 
 .card{
   background:var(--card);
@@ -46,16 +38,19 @@ h1{ margin:0; font-size:22px; }
   box-shadow:0 10px 30px rgba(0,0,0,.25);
 }
 
+.hr{ height:1px; background:rgba(255,255,255,.12); margin:14px 0; }
+
+/* ---------- FORMS ---------- */
+
 .row{
   display:grid;
-  grid-template-columns: 130px 1fr;
+  grid-template-columns: 140px 1fr;
   gap:10px;
   align-items:center;
   margin:8px 0;
 }
-.row.inline{ grid-template-columns: 1fr; }
 
-label{ color:var(--muted); font-size:13px; }
+label{ font-size:13px; color:var(--muted); }
 
 input,select{
   width:100%;
@@ -66,14 +61,8 @@ input,select{
   color:var(--text);
 }
 
-.btns{
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
-  margin-top:10px;
-}
 button{
-  padding:9px 10px;
+  padding:9px 12px;
   border-radius:10px;
   border:1px solid rgba(255,255,255,.14);
   background:var(--field);
@@ -82,63 +71,96 @@ button{
 }
 button.primary{
   background:var(--pri);
-  border-color:transparent;
+  border:none;
   color:#061022;
   font-weight:700;
 }
 
-.hr{ height:1px; background:rgba(255,255,255,.10); margin:12px 0; }
+.btns{ display:flex; gap:8px; flex-wrap:wrap; }
 
-.tabs{ display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
-.tab.active{ background:var(--pri); color:#061022; font-weight:700; }
+/* ---------- TABS ---------- */
+
+.tabs{ display:flex; gap:8px; margin-bottom:10px; }
+.tab.active{
+  background:var(--pri);
+  color:#061022;
+  font-weight:700;
+}
+
+/* ---------- LIST LAYOUT ---------- */
 
 .cols{
   display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap:12px;
+  grid-template-columns: 520px 1fr;
+  gap:14px;
 }
 
-.search{ margin-bottom:8px; }
-.actions{ display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+/* ---------- LISTBOX ---------- */
 
 .list{
-  border:1px solid rgba(255,255,255,.10);
+  background:var(--field);
+  border:1px solid rgba(255,255,255,.12);
   border-radius:12px;
   padding:10px;
-  background:var(--field);
+  height: 62vh;
+  min-height: 420px;
   overflow:auto;
-
-  /* statt harter 420px: viewport-basiert, aber begrenzt */
-  height: min(56vh, 560px);
-  min-height: 260px;
 }
 
-.small{ font-size:13px; }
-.muted{ color:var(--muted); }
+/* einzelne Zeile in Listen */
+.list > div{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:6px 4px;
+}
 
+.list input[type="checkbox"]{
+  flex:0 0 auto;
+}
+
+.list span{
+  white-space:normal;
+  word-break:break-word;
+}
+
+/* Kategorie-Zeile */
 .pill{
+  margin-left:auto;
+  font-size:12px;
   padding:2px 8px;
   border-radius:999px;
-  border:1px solid rgba(255,255,255,.12);
+  border:1px solid rgba(255,255,255,.14);
   color:var(--muted);
-  font-size:12px;
 }
 
-.conn .kv{
+/* ---------- CLEANUP ---------- */
+
+.cleanup-box{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:8px 14px;
+  margin-bottom:10px;
+}
+
+.cleanup-box label{
   display:flex;
-  justify-content:space-between;
-  gap:12px;
-  margin:4px 0;
+  align-items:center;
+  gap:8px;
   font-size:13px;
 }
+
+/* ---------- STATUS ---------- */
+
+.status{ font-size:13px; color:var(--muted); }
 .ok{ color:var(--ok); font-weight:700; }
 .bad{ color:var(--bad); font-weight:700; }
 
-/* ✅ Responsive: Unraid WebUI / Handy / kleiner Browser */
-@media (max-width: 980px){
+/* ---------- RESPONSIVE ---------- */
+
+@media (max-width: 1100px){
   .grid{ grid-template-columns: 1fr; }
   .cols{ grid-template-columns: 1fr; }
   .row{ grid-template-columns: 1fr; }
-  .top{ align-items:flex-start; flex-direction:column; }
-  .list{ height: min(46vh, 520px); }
+  .list{ height: 52vh; }
 }
