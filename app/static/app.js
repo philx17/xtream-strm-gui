@@ -553,10 +553,7 @@ async function init(){
     card.appendChild(wrap);
 
     const box = document.createElement("div");
-    box.style.display = "grid";
-    box.style.gridTemplateColumns = "1fr 1fr";
-    box.style.gap = "8px 12px";
-    box.style.marginBottom = "8px";
+    box.className = "cleanup-box";
 
     const mkcb = (id, label) => {
       const d = document.createElement("label");
@@ -627,7 +624,14 @@ async function init(){
 
   const st = await apiGet("/api/status");
   if(st.last_run){
-    setStatus(`Letzter Run: ${st.last_run.time} (${st.last_run.reason})`);
+    function fmtDE(ts){
+        const d = new Date(ts);
+        const pad = n => String(n).padStart(2,"0");
+        return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} `
+             + `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      }
+      
+      setStatus(`Letzter Run: ${fmtDE(st.last_run.time)} (${st.last_run.reason})`);
   } else if(st.has_catalog){
     setStatus("Catalog geladen (cached). Du kannst Auswahl ändern, ohne Playlist neu zu laden.");
   } else {
