@@ -20,15 +20,17 @@ body{
   color:var(--text);
 }
 
-.wrap{ max-width:1400px; margin:0 auto; padding:18px; }
+.wrap{
+  max-width:1500px;
+  margin:0 auto;
+  padding:18px;
+}
 
 .grid{
   display:grid;
   grid-template-columns: 420px 1fr;
-  gap:16px;
+  gap:18px;
 }
-
-/* ---------- CARDS ---------- */
 
 .card{
   background:var(--card);
@@ -38,9 +40,11 @@ body{
   box-shadow:0 10px 30px rgba(0,0,0,.25);
 }
 
-.hr{ height:1px; background:rgba(255,255,255,.12); margin:14px 0; }
-
-/* ---------- FORMS ---------- */
+.hr{
+  height:1px;
+  background:rgba(255,255,255,.12);
+  margin:14px 0;
+}
 
 .row{
   display:grid;
@@ -50,7 +54,10 @@ body{
   margin:8px 0;
 }
 
-label{ font-size:13px; color:var(--muted); }
+label{
+  font-size:13px;
+  color:var(--muted);
+}
 
 input,select{
   width:100%;
@@ -69,6 +76,7 @@ button{
   color:var(--text);
   cursor:pointer;
 }
+
 button.primary{
   background:var(--pri);
   border:none;
@@ -76,11 +84,18 @@ button.primary{
   font-weight:700;
 }
 
-.btns{ display:flex; gap:8px; flex-wrap:wrap; }
+.btns{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
 
-/* ---------- TABS ---------- */
+.tabs{
+  display:flex;
+  gap:8px;
+  margin-bottom:10px;
+}
 
-.tabs{ display:flex; gap:8px; margin-bottom:10px; }
 .tab.active{
   background:var(--pri);
   color:#061022;
@@ -91,42 +106,51 @@ button.primary{
 
 .cols{
   display:grid;
-  grid-template-columns: 520px 1fr;
-  gap:14px;
+  grid-template-columns: 560px 1fr;
+  gap:16px;
 }
-
-/* ---------- LISTBOX ---------- */
 
 .list{
   background:var(--field);
   border:1px solid rgba(255,255,255,.12);
   border-radius:12px;
-  padding:10px;
-  height: 62vh;
+  padding:6px;
+  height: 64vh;
   min-height: 420px;
   overflow:auto;
 }
 
-/* einzelne Zeile in Listen */
-.list > div{
-  display:flex;
+/* ---------- LIST ROWS (FIX) ---------- */
+
+.list-row{
+  display:grid;
+  grid-template-columns: 22px 1fr auto;
   align-items:center;
   gap:10px;
-  padding:6px 4px;
+  padding:6px 8px;
 }
 
-.list input[type="checkbox"]{
-  flex:0 0 auto;
+.list-row.item{
+  grid-template-columns: 22px 1fr;
 }
 
-.list span{
+.list-row:hover{
+  background:rgba(255,255,255,.04);
+  border-radius:8px;
+}
+
+.list-row input[type="checkbox"]{
+  margin:0;
+}
+
+.list-name{
+  text-align:left;
+  line-height:1.25;
   white-space:normal;
   word-break:break-word;
 }
 
-/* Kategorie-Zeile */
 .pill{
-  margin-left:auto;
   font-size:12px;
   padding:2px 8px;
   border-radius:999px;
@@ -152,7 +176,11 @@ button.primary{
 
 /* ---------- STATUS ---------- */
 
-.status{ font-size:13px; color:var(--muted); }
+.status{
+  font-size:13px;
+  color:var(--muted);
+}
+
 .ok{ color:var(--ok); font-weight:700; }
 .bad{ color:var(--bad); font-weight:700; }
 
