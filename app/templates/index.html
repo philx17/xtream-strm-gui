@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Xtream STRM GUI</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <h1>Xtream STRM GUI</h1>
+      <div id="status" class="status">…</div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Credentials</h3>
+
+        <div class="row">
+          <label>Base URL</label>
+          <input id="base_url" placeholder="http://example.com:8080"/>
+        </div>
+        <div class="row">
+          <label>Username</label>
+          <input id="username" placeholder="username"/>
+        </div>
+        <div class="row">
+          <label>Password</label>
+          <input id="password" type="password" placeholder="password"/>
+        </div>
+        <div class="row">
+          <label>Output</label>
+          <select id="output">
+            <option value="ts">ts</option>
+            <option value="m3u8">m3u8</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label>Output Dir (Container)</label>
+          <input id="out_dir" value="/output"/>
+        </div>
+
+        <div class="row inline">
+          <label><input id="sync_delete" type="checkbox"/> Entfernte STRM löschen</label>
+        </div>
+        <div class="row inline">
+          <label><input id="prune_sidecars" type="checkbox"/> Sidecars löschen (nfo/jpg/...)</label>
+        </div>
+
+        <div class="hr"></div>
+
+        <h4>Daily Sync</h4>
+        <div class="row inline">
+          <label><input id="sched_enabled" type="checkbox"/> Daily Sync aktivieren</label>
+        </div>
+        <div class="row">
+          <label>Uhrzeit</label>
+          <input id="sched_time" type="time" value="03:30"/>
+        </div>
+
+        <div class="btns">
+          <button id="btn_save">Speichern</button>
+          <button id="btn_test">Test</button>
+          <button id="btn_refresh">Playlist laden</button>
+          <button id="btn_run" class="primary">Run now</button>
+        </div>
+
+        <div class="hr"></div>
+        <h4>Account</h4>
+        <div id="conn_box" class="conn"></div>
+      </div>
+
+      <div class="card">
+        <div class="tabs">
+          <button class="tab active" data-tab="livetv">LiveTV</button>
+          <button class="tab" data-tab="movies">Movies</button>
+          <button class="tab" data-tab="series">Series</button>
+        </div>
+
+        <div id="panel_livetv" class="panel">
+          <div class="cols">
+            <div class="col">
+              <div class="search">
+                <input id="search_livetv_cat" placeholder="Kategorien suchen…"/>
+              </div>
+              <div class="actions">
+                <button id="livetv_select_cat">Kategorie voll auswählen</button>
+                <button id="livetv_clear_cat">Kategorie abwählen</button>
+              </div>
+              <div id="livetv_cats" class="list"></div>
+            </div>
+            <div class="col">
+              <div class="search">
+                <input id="search_livetv_items" placeholder="Sender suchen…"/>
+              </div>
+              <div id="livetv_items" class="list"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="panel_movies" class="panel" style="display:none">
+          <div class="cols">
+            <div class="col">
+              <div class="search">
+                <input id="search_movies_cat" placeholder="Kategorien suchen…"/>
+              </div>
+              <div class="actions">
+                <button id="movies_select_cat">Kategorie voll auswählen</button>
+                <button id="movies_clear_cat">Kategorie abwählen</button>
+              </div>
+              <div id="movies_cats" class="list"></div>
+            </div>
+            <div class="col">
+              <div class="search">
+                <input id="search_movies_items" placeholder="Filme suchen…"/>
+              </div>
+              <div id="movies_items" class="list"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="panel_series" class="panel" style="display:none">
+          <div class="cols">
+            <div class="col">
+              <div class="search">
+                <input id="search_series_show" placeholder="Shows suchen…"/>
+              </div>
+              <div class="actions">
+                <button id="series_select_show">Show auswählen</button>
+                <button id="series_clear_show">Show abwählen</button>
+              </div>
+              <div id="series_shows" class="list"></div>
+            </div>
+            <div class="col">
+              <div class="search">
+                <input id="search_series_eps" placeholder="Episoden suchen…"/>
+              </div>
+              <div id="series_eps" class="list"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
