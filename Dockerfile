@@ -6,8 +6,8 @@ WORKDIR /app
 
 # System deps (+ vim)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    vim-tiny \
+     ca-certificates \
+     vim \
  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt
