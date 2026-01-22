@@ -41,20 +41,14 @@ def write_strm(path: Path, url: str) -> bool:
 
 
 def write_binary_if_changed(dst: Path, src: Path) -> bool:
-    """
-    Copy src -> dst only if content differs (cheap check: size+mtime then bytes if needed).
-    """
     dst.parent.mkdir(parents=True, exist_ok=True)
-
     if dst.exists():
         try:
             if dst.stat().st_size == src.stat().st_size:
-                # fast path: if same size and same sha256, skip
-                if sha256(src.read_bytes().hex()) == sha256(dst.read_bytes().hex()):
+                if dst.read_bytes() == src.read_bytes():
                     return False
         except Exception:
             pass
-
     shutil.copyfile(src, dst)
     return True
 
@@ -75,14 +69,6 @@ def remove_if_empty_dirs(start_dir: Path, stop_at: Path):
 # Allowlist
 # -------------------------
 def allow_item(kind: str, group: str, tvg_name: str, show: str, allow_cfg: dict) -> bool:
-    """
-    Allowlist logic:
-    - If a category is in full_categories => everything in that category is allowed (incl. new items)
-    - Otherwise:
-      - allow if category is in categories OR title is in titles
-    - For series:
-      - allow if show in shows OR episode-title in titles
-    """
     allow = allow_cfg or {}
 
     if kind == "livetv":
@@ -105,18 +91,10 @@ def allow_item(kind: str, group: str, tvg_name: str, show: str, allow_cfg: dict)
 
 
 # -------------------------
-# LiveTV Folder name (FIXED: uses your proven terminal logic)
+# LiveTV Folder name (your proven terminal logic)
 # -------------------------
 def channel_folder_from_name(name: str) -> str:
-    """
-    Uses simple separator cutting (no regex) + removes ONLY known country prefixes.
-    Example: "DE: SAT 1 HD" -> "SAT 1 HD"
-             "CH | SRF 1 HD" -> "SRF 1 HD"
-             "DE_ VOX HEVC" -> "VOX HEVC"
-             "DE- RTL 2 FHD" -> "RTL 2 FHD"
-    """
     def strip_country_prefix(s: str) -> str:
-        # only remove these exact prefixes (case-insensitive)
         prefixes = ['DE', 'AT', 'CH', 'GER', 'EU', 'UK', 'US', 'FR', 'IT', 'ES', 'NL', 'PL']
         out = s
         for _ in range(2):
@@ -127,14 +105,13 @@ def channel_folder_from_name(name: str) -> str:
             token = t[:sp].strip()
             token_up = token.upper().rstrip(':|_-')
             if token_up in prefixes:
-                out = t[sp+1:]
+                out = t[sp + 1 :]
                 continue
             return out
         return out
 
     s = (name or '').strip()
 
-    # cut ONCE right of first matching separator, in priority
     if ':' in s:
         s = s.split(':', 1)[1]
     elif '|' in s:
@@ -147,7 +124,6 @@ def channel_folder_from_name(name: str) -> str:
     s = s.lstrip()
     s = ' '.join(s.split())
 
-    # remove only known country prefixes
     s = strip_country_prefix(s)
     s = s.lstrip()
     s = ' '.join(s.split())
@@ -156,54 +132,51 @@ def channel_folder_from_name(name: str) -> str:
 
 
 # -------------------------
+# Movie Dedupe Key (ONLY movies)
+# -------------------------
+def movie_dedupe_key(tvg_name: str) -> str:
+    s = clean_lang_tags(tvg_name or "").strip().lower()
+    # remove typical quality/codec tokens
+    s = re.sub(r"\b(sd|hd|fhd|uhd|hevc|h\.?265|h\.?264|4k|8k)\b", " ", s, flags=re.I)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+# -------------------------
 # Picon Matching
 # -------------------------
 IGNORE_TOKENS = {
-    # quality / variants
     "sd", "hd", "fhd", "uhd", "hevc", "hvec",
     "4k", "8k",
-    # generic words
     "tv", "channel", "sender",
     "backup",
-    # countries / regions (often prefixes)
     "de", "at", "ch", "ger", "eu",
 }
 
 def _split_alnum_boundaries(s: str) -> str:
-    # "sat1hd" -> "sat 1 hd", "dazn2" -> "dazn 2", "laliga2" -> "laliga 2"
     s = re.sub(r"([a-zA-Z])([0-9])", r"\1 \2", s)
     s = re.sub(r"([0-9])([a-zA-Z])", r"\1 \2", s)
     return s
 
 def _normalize_text_for_tokens(s: str) -> str:
     s = (s or "").strip()
-
-    # cut right of separator once (priority)
     for sep in [":", "|", "_", "-"]:
         if sep in s:
             s = s.split(sep, 1)[1]
             break
-
     s = s.strip()
     s = s.replace("&", " and ")
-
-    # remove "(1)" "(2)" etc
     s = re.sub(r"\(\s*\d+\s*\)", " ", s)
-
     s = _split_alnum_boundaries(s)
-
-    # re-join 4k / 8k if split into "4 k"
     s = re.sub(r"\b4\s+k\b", "4k", s, flags=re.IGNORECASE)
     s = re.sub(r"\b8\s+k\b", "8k", s, flags=re.IGNORECASE)
-
     s = re.sub(r"[^a-zA-Z0-9äöüÄÖÜß ]+", " ", s)
     s = re.sub(r"\s+", " ", s).strip().lower()
     return s
 
 def _tokens_from(s: str):
     s = _normalize_text_for_tokens(s)
-    toks = [t for t in s.split(" ") if t and t not in IGNORE_TOKENS]
-    return toks
+    return [t for t in s.split(" ") if t and t not in IGNORE_TOKENS]
 
 def _score_tokens(name_toks, file_toks) -> float:
     ns = " ".join(name_toks)
@@ -215,34 +188,86 @@ def _score_tokens(name_toks, file_toks) -> float:
     return overlap * 2.0 + sim
 
 def build_picon_index(picon_dir: Path):
-    """
-    Returns list of (path, tokens) for all .png under picon_dir (recursive).
-    """
     if not picon_dir.exists():
         return []
     files = [p for p in picon_dir.rglob("*.png") if p.is_file()]
     return [(p, _tokens_from(p.stem)) for p in files]
 
 def find_best_picon(picon_index, channel_name: str):
-    """
-    Returns Path of best picon match or None.
-    """
     nt = _tokens_from(channel_name)
     if not nt:
         return None
 
-    best = (0.0, None)
+    best_score = 0.0
+    best_path = None
     for p, ft in picon_index:
-        s = _score_tokens(nt, ft)
-        if s > best[0]:
-            best = (s, p)
+        sc = _score_tokens(nt, ft)
+        if sc > best_score:
+            best_score = sc
+            best_path = p
 
-    # basic threshold: require at least 1 token overlap meaningfully
-    if best[1] is None:
+    if best_path is None:
         return None
-    if best[0] < 2.2:  # tuned: overlap*2 + sim -> needs overlap>=1 usually
+    if best_score < 2.2:
         return None
-    return best[1]
+    return best_path
+
+
+# -------------------------
+# Delete helpers (delete -poster/-backdrop/-logo etc.)
+# -------------------------
+_STEM_SIDECARS = [".nfo", ".jpg", ".jpeg", ".png", ".webp", ".srt", ".ass", ".sub"]
+_FOLDER_ART = ["poster.png", "poster.jpg", "poster.jpeg", "folder.png", "folder.jpg", "folder.jpeg", "backdrop.png", "backdrop.jpg", "backdrop.jpeg"]
+
+def delete_related_files_for_strm(strm_path: Path, prune_sidecars: bool):
+    """
+    When a .strm is removed:
+    - if prune_sidecars: delete classic stem sidecars: <stem>.jpg, <stem>.nfo, ...
+    - always delete Jellyfin-style artworks: <stem>-poster.jpg / -backdrop.jpg / -logo.png / -landscape.jpg ...
+      (matching: "<stem>-*.{jpg,jpeg,png,webp}")
+    - if folder has no other .strm after deletion: delete folder art (poster.png etc.)
+    """
+    try:
+        parent = strm_path.parent
+        stem = strm_path.with_suffix("")
+        stem_str = str(stem)
+
+        if prune_sidecars:
+            for ext in _STEM_SIDECARS:
+                side = Path(stem_str + ext)
+                if side.exists() and side.is_file():
+                    try:
+                        side.unlink()
+                    except Exception:
+                        pass
+
+        for p in parent.iterdir():
+            if not p.is_file():
+                continue
+            suf = p.suffix.lower()
+            if suf not in (".jpg", ".jpeg", ".png", ".webp"):
+                continue
+            if p.name.startswith(stem.name + "-"):
+                try:
+                    p.unlink()
+                except Exception:
+                    pass
+
+        try:
+            remaining = list(parent.glob("*.strm"))
+        except Exception:
+            remaining = []
+        if len(remaining) == 0:
+            for fn in _FOLDER_ART:
+                q = parent / fn
+                if q.exists() and q.is_file():
+                    try:
+                        q.unlink()
+                    except Exception:
+                        pass
+
+    except Exception:
+        pass
 
 
 # -------------------------
@@ -287,6 +312,9 @@ def run_sync(
     picon_dir = out_dir / "picons"
     picon_index = build_picon_index(picon_dir)
 
+    # DEDUPE ONLY FOR MOVIES
+    seen_movie_keys = set()
+
     for it in parse_m3u(m3u_text):
         attrs = it["attrs"]
         url = it["url"]
@@ -320,11 +348,16 @@ def run_sync(
                 skipped += 1
                 continue
 
+            mkey = movie_dedupe_key(tvg_name)
+            if mkey and mkey in seen_movie_keys:
+                continue
+            if mkey:
+                seen_movie_keys.add(mkey)
+
             genre_dir = safe_name(group.replace("/", "_"))
             target = out_dir / "Movies" / genre_dir / (safe_name(clean_lang_tags(tvg_name)) + ".strm")
 
         else:
-            # livetv
             if not allow_item("livetv", group, tvg_name, None, allow_cfg):
                 skipped += 1
                 continue
@@ -332,8 +365,6 @@ def run_sync(
             cat_dir = safe_name(group)
             channel_folder = safe_name(channel_folder_from_name(tvg_name))
             channel_dir = out_dir / "LiveTV" / cat_dir / channel_folder
-
-            # keep original file name (may contain prefix like DE:)
             target = channel_dir / (safe_name(tvg_name) + ".strm")
 
         desired_paths.add(str(target))
@@ -346,14 +377,16 @@ def run_sync(
             else:
                 created += 1
 
-        # If LiveTV: copy best picon to poster.png in the same channel folder
-        if kind != "series" and kind != "movie":
+        # LiveTV: copy best picon to poster.png AND backdrop.png in the same channel folder
+        if kind == "livetv":
             if picon_index:
                 best = find_best_picon(picon_index, tvg_name)
                 if best is not None:
-                    poster = target.parent / "poster.png"
                     try:
+                        poster = target.parent / "poster.png"
+                        backdrop = target.parent / "backdrop.png"
                         write_binary_if_changed(poster, best)
+                        write_binary_if_changed(backdrop, best)
                     except Exception:
                         pass
 
@@ -370,6 +403,7 @@ def run_sync(
 
     deleted = 0
     sidecars_deleted = 0
+
     if sync_delete:
         removed = old_paths - desired_paths
         for p_str in sorted(removed):
@@ -381,16 +415,11 @@ def run_sync(
                 except Exception:
                     continue
 
-                if prune_sidecars:
-                    stem = p.with_suffix("")
-                    for ext in [".nfo", ".jpg", ".jpeg", ".png", ".webp", ".srt", ".ass", ".sub"]:
-                        side = Path(str(stem) + ext)
-                        if side.exists() and side.is_file():
-                            try:
-                                side.unlink()
-                                sidecars_deleted += 1
-                            except Exception:
-                                pass
+                try:
+                    delete_related_files_for_strm(p, prune_sidecars=prune_sidecars)
+                    sidecars_deleted += 1
+                except Exception:
+                    pass
 
                 remove_if_empty_dirs(p.parent, out_dir)
 
