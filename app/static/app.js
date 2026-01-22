@@ -1,3 +1,7 @@
+// ===============================
+// app.js (FINAL) - ONE GLOBAL FILTER for EVERYTHING + Pending Marking
+// ===============================
+
 let cfg = null;
 let catalog = null;
 
@@ -6,6 +10,84 @@ let selectedLiveCat = null;
 let selectedMovieCat = null;
 let selectedShow = null;
 
+// ---------- GLOBAL: one filter for EVERYTHING ----------
+let uiFilterMode = "all"; // default "Alle"
+
+function setGlobalFilter(val){
+  uiFilterMode = val || "all";
+}
+
+function getGlobalFilter(){
+  return uiFilterMode || "all";
+}
+
+// ---------- Saved snapshot for "pending" ----------
+let savedAllowSnapshot = null; // deep clone of cfg.allow after last save/load
+
+function snapshotSavedAllow(){
+  try{
+    savedAllowSnapshot = JSON.parse(JSON.stringify(cfg.allow || {}));
+  }catch(e){
+    savedAllowSnapshot = null;
+  }
+}
+
+function ensureSnapshot(){
+  if(!savedAllowSnapshot) snapshotSavedAllow();
+}
+
+// pending helpers
+function setHas(setLike, v){
+  return new Set(setLike || []).has(v);
+}
+
+function pendingForTitle(kind, title){
+  ensureSnapshot();
+  const now = setHas(cfg?.allow?.[kind]?.titles, title);
+  const saved = setHas(savedAllowSnapshot?.[kind]?.titles, title);
+  return now !== saved;
+}
+
+function pendingForCategory(kind, category){
+  ensureSnapshot();
+  const nowFull = setHas(cfg?.allow?.[kind]?.full_categories, category);
+  const savedFull = setHas(savedAllowSnapshot?.[kind]?.full_categories, category);
+  if(nowFull !== savedFull) return true;
+
+  const items = getCategoryItems(kind, category);
+  for(const n of items){
+    if(pendingForTitle(kind, n)) return true;
+  }
+  return false;
+}
+
+function pendingForShow(show){
+  ensureSnapshot();
+  const nowFull = setHas(cfg?.allow?.series?.full_shows, show);
+  const savedFull = setHas(savedAllowSnapshot?.series?.full_shows, show);
+  if(nowFull !== savedFull) return true;
+
+  const nowShow = setHas(cfg?.allow?.series?.shows, show);
+  const savedShow = setHas(savedAllowSnapshot?.series?.shows, show);
+  if(nowShow !== savedShow) return true;
+
+  const eps = getShowEpisodeNames(show);
+  for(const n of eps){
+    const now = setHas(cfg?.allow?.series?.titles, n);
+    const saved = setHas(savedAllowSnapshot?.series?.titles, n);
+    if(now !== saved) return true;
+  }
+  return false;
+}
+
+function pendingForEpisode(epTitle){
+  ensureSnapshot();
+  const now = setHas(cfg?.allow?.series?.titles, epTitle);
+  const saved = setHas(savedAllowSnapshot?.series?.titles, epTitle);
+  return now !== saved;
+}
+
+// ---------- DOM helpers ----------
 function el(id){ return document.getElementById(id); }
 
 function sortAlphaDE(arr){
@@ -71,6 +153,7 @@ function showSelectionState(show){
   return "partial";
 }
 
+// ---------- API ----------
 async function apiGet(path){
   const r = await fetch(path);
   const j = await r.json();
@@ -90,7 +173,9 @@ async function apiPost(path, body){
 }
 
 function setStatus(msg){ el("status").textContent = msg; }
+function setStatusTop(msg){ el("statusTop").textContent = msg; }
 
+// ---------- Tabs ----------
 function setTab(tab){
   currentTab = tab;
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab===tab));
@@ -99,6 +184,7 @@ function setTab(tab){
   el("panel_series").style.display = tab==="series" ? "block":"none";
 }
 
+// ---------- Config shape ----------
 function ensureAllow(){
   cfg.allow = cfg.allow || {};
   cfg.allow.livetv = cfg.allow.livetv || {categories:[], titles:[], full_categories:[]};
@@ -108,8 +194,11 @@ function ensureAllow(){
   cfg.allow.livetv.full_categories = cfg.allow.livetv.full_categories || [];
   cfg.allow.movies.full_categories = cfg.allow.movies.full_categories || [];
   cfg.allow.series.full_shows = cfg.allow.series.full_shows || [];
+  cfg.allow.series.shows = cfg.allow.series.shows || [];
+  cfg.allow.series.titles = cfg.allow.series.titles || [];
 }
 
+// ---------- Form ----------
 function loadForm(){
   el("base_url").value = cfg.xtream.base_url || "";
   el("username").value = cfg.xtream.username || "";
@@ -187,6 +276,57 @@ function reorderItemsControls(kind){
   const actions = parent.querySelector(".actions");
   if(!actions) return;
   parent.insertBefore(actions, input);
+}
+
+// ---------- GLOBAL filter UI injection ----------
+function makeGlobalFilterSelect(onChange){
+  const sel = document.createElement("select");
+  sel.style.maxWidth = "260px";
+  sel.style.padding = "6px";
+  sel.innerHTML = `
+    <option value="all">Alle</option>
+    <option value="unselected_or_pending">Nur nicht ausgewählt + Pending</option>
+    <option value="selected">Nur ausgewählt</option>
+    <option value="unselected">Nur nicht ausgewählt</option>
+    <option value="pending">Nur Pending (noch nicht gespeichert)</option>
+  `;
+  sel.value = getGlobalFilter();
+  sel.addEventListener("change", ()=>{
+    setGlobalFilter(sel.value);
+    onChange && onChange(sel.value);
+  });
+  return sel;
+}
+
+function injectGlobalFilterAboveTabs(){
+  const tab = document.querySelector(".tab");
+  if(!tab) return;
+
+  const tabsRow = tab.parentElement;
+  if(!tabsRow) return;
+
+  if(tabsRow.dataset.hasGlobalFilter === "1") return;
+  tabsRow.dataset.hasGlobalFilter = "1";
+
+  const wrap = document.createElement("div");
+  wrap.style.display = "flex";
+  wrap.style.gap = "10px";
+  wrap.style.alignItems = "center";
+  wrap.style.flexWrap = "wrap";
+  wrap.style.margin = "0 0 10px";
+
+  const label = document.createElement("span");
+  label.className = "small muted";
+  label.textContent = "Globaler Filter:";
+  wrap.appendChild(label);
+
+  const sel = makeGlobalFilterSelect(()=>{
+    if(!catalog) return;
+    renderAll(); // apply everywhere
+  });
+  wrap.appendChild(sel);
+
+  tabsRow.parentElement.insertBefore(wrap, tabsRow);
 }
 
 // ---------- Bulk helpers ----------
@@ -272,11 +412,28 @@ function setAllEpisodesForSelectedShow(enabled){
   renderEpisodes();
 }
 
+// ---------- filtering + pending marking ----------
+function passFilter(mode, isSelected, isPending){
+  if(mode === "selected") return !!isSelected;
+  if(mode === "unselected") return !isSelected;
+  if(mode === "pending") return !!isPending;
+  if(mode === "unselected_or_pending") return (!isSelected) || (!!isPending);
+  return true; // all
+}
+
+function markRowPending(row, isPending){
+  if(!isPending) return;
+  row.style.borderLeft = "4px solid #f2c94c";
+  row.style.paddingLeft = "8px";
+  row.title = "Pending: Auswahl noch nicht gespeichert";
+}
+
 // ---- LiveTV/Movies: Categories + Items ----
 function renderCats(kind){
   const box = el(kind + "_cats");
   box.innerHTML = "";
   const search = el("search_" + kind + "_cat").value.trim().toLowerCase();
+  const mode = getGlobalFilter(); // GLOBAL
 
   const cats = (catalog?.[kind]?.categories) || {};
   const keys = sortAlphaDE(Object.keys(cats));
@@ -288,9 +445,12 @@ function renderCats(kind){
 
     const isFullSticky = categoryIsFullSticky(kind, k);
     const state = categorySelectionState(kind, k);
-
     const checked = isFullSticky || (state === "all");
     const indeterminate = (!checked && state === "partial");
+
+    const isPending = pendingForCategory(kind, k);
+
+    if(!passFilter(mode, checked || indeterminate, isPending)) return;
 
     const row = document.createElement("div");
     row.style.display="flex";
@@ -298,6 +458,8 @@ function renderCats(kind){
     row.style.justifyContent="space-between";
     row.style.gap="10px";
     row.style.padding="6px 0";
+
+    markRowPending(row, isPending);
 
     const left = document.createElement("div");
     left.style.display="flex";
@@ -357,6 +519,7 @@ function renderItems(kind){
   const box = el(kind + "_items");
   box.innerHTML = "";
   const search = el("search_" + kind + "_items").value.trim().toLowerCase();
+  const mode = getGlobalFilter(); // GLOBAL
 
   let catKey = null;
   if(kind==="livetv") catKey = selectedLiveCat;
@@ -384,12 +547,17 @@ function renderItems(kind){
     if(search && !name.toLowerCase().includes(search)) return;
 
     const checked = isFullSticky || (cfg.allow[kind].titles || []).includes(name);
+    const isPending = pendingForTitle(kind, name);
+
+    if(!passFilter(mode, checked, isPending)) return;
 
     const row = document.createElement("div");
     row.style.display="flex";
     row.style.alignItems="center";
     row.style.gap="8px";
     row.style.padding="6px 0";
+
+    markRowPending(row, isPending);
 
     const cb = document.createElement("input");
     cb.type="checkbox";
@@ -411,6 +579,8 @@ function renderItems(kind){
       const selectedCount = itemsInCat.reduce((acc, n)=> acc + (titles.has(n) ? 1 : 0), 0);
       if(itemsInCat.length > 0 && selectedCount === itemsInCat.length){
         fullSet.add(catKey);
+      } else {
+        fullSet.delete(catKey);
       }
 
       cfg.allow[kind].titles = Array.from(titles);
@@ -434,6 +604,7 @@ function renderShows(){
   const box = el("series_shows");
   box.innerHTML = "";
   const search = el("search_series_show").value.trim().toLowerCase();
+  const mode = getGlobalFilter(); // GLOBAL
 
   const shows = catalog?.series?.shows || {};
   const keys = sortAlphaDE(Object.keys(shows));
@@ -444,10 +615,14 @@ function renderShows(){
     const total = shows[show]?.total ?? 0;
 
     const sticky = showIsFullSticky(show);
-    const state = showSelectionState(show); // none/partial/all
+    const state = showSelectionState(show);
 
     const checked = sticky || (state === "all");
     const indeterminate = (!checked && state === "partial");
+
+    const isPending = pendingForShow(show);
+
+    if(!passFilter(mode, checked || indeterminate, isPending)) return;
 
     const row = document.createElement("div");
     row.style.display="flex";
@@ -455,6 +630,8 @@ function renderShows(){
     row.style.justifyContent="space-between";
     row.style.gap="10px";
     row.style.padding="6px 0";
+
+    markRowPending(row, isPending);
 
     const left = document.createElement("div");
     left.style.display="flex";
@@ -518,6 +695,7 @@ function renderEpisodes(){
   const box = el("series_eps");
   box.innerHTML = "";
   const search = el("search_series_eps").value.trim().toLowerCase();
+  const mode = getGlobalFilter(); // GLOBAL
 
   if(!selectedShow){
     box.innerHTML = `<div class="small muted">Wähle links eine Show.</div>`;
@@ -550,12 +728,17 @@ function renderEpisodes(){
       if(search && !name.toLowerCase().includes(search)) return;
 
       const checked = sticky || (cfg.allow.series.titles || []).includes(name);
+      const isPending = pendingForEpisode(name);
+
+      if(!passFilter(mode, checked, isPending)) return;
 
       const row = document.createElement("div");
       row.style.display="flex";
       row.style.alignItems="center";
       row.style.gap="8px";
       row.style.padding="4px 0";
+
+      markRowPending(row, isPending);
 
       const cb = document.createElement("input");
       cb.type="checkbox";
@@ -580,6 +763,7 @@ function renderEpisodes(){
           full.add(selectedShow);
           allowedShows.add(selectedShow);
         } else {
+          full.delete(selectedShow);
           if(selectedCount === 0){
             allowedShows.delete(selectedShow);
           } else {
@@ -616,7 +800,7 @@ function renderAll(){
   renderEpisodes();
 }
 
-// ---------- Changes (only ADDED) ----------
+// ---------- Changes ----------
 function fmtDE(ts){
   const d = new Date(ts);
   if(Number.isNaN(d.getTime())) return String(ts || "");
@@ -656,7 +840,6 @@ async function loadChangesBox(){
       return;
     }
 
-    // sort: kind -> group/show -> title
     const sorted = added.slice().sort((a,b)=>{
       const ak = (a.kind||"").localeCompare(b.kind||"");
       if(ak) return ak;
@@ -720,6 +903,12 @@ async function init(){
   ensureAllow();
   loadForm();
 
+  // snapshot for pending comparison (loaded config is "saved")
+  snapshotSavedAllow();
+
+  // default global filter
+  setGlobalFilter("all");
+
   // Layout: actions above search in items columns
   reorderItemsControls("livetv");
   reorderItemsControls("movies");
@@ -729,12 +918,15 @@ async function init(){
     t.addEventListener("click", ()=> setTab(t.dataset.tab));
   });
 
+  // NEW: global filter above the LiveTV/Movies/Series tabs
+  injectGlobalFilterAboveTabs();
+
   // Rename per-category buttons (LiveTV/Movies)
   (function renamePerCategoryButtons(){
-    const a = el("livetv_select_cat"); if(a) a.textContent = "Alle Inhalte auswählen";
-    const b = el("livetv_clear_cat");  if(b) b.textContent = "Alle Inhalte abwählen";
-    const c = el("movies_select_cat"); if(c) c.textContent = "Alle Inhalte auswählen";
-    const d = el("movies_clear_cat");  if(d) d.textContent = "Alle Inhalte abwählen";
+    const a = el("livetv_select_cat"); if(a) a.textContent = "Alle Sender auswählen";
+    const b = el("livetv_clear_cat");  if(b) b.textContent = "Alle Sender abwählen";
+    const c = el("movies_select_cat"); if(c) c.textContent = "Alle Filme auswählen";
+    const d = el("movies_clear_cat");  if(d) d.textContent = "Alle Filme abwählen";
   })();
 
   // Inject SERIES actions (All shows + all episodes) without HTML change
@@ -794,13 +986,16 @@ async function init(){
   el("btn_save").addEventListener("click", async ()=>{
     saveFormIntoCfg();
     await apiPost("/api/config", cfg);
+    snapshotSavedAllow(); // pending clears
     setStatus("Gespeichert.");
+    if(catalog) renderAll();
   });
 
   // Test connection
   el("btn_test").addEventListener("click", async ()=>{
     saveFormIntoCfg();
     await apiPost("/api/config", cfg);
+    snapshotSavedAllow();
     setStatus("Teste Verbindung...");
     const res = await apiGet("/api/test");
     renderConnStatus(res);
@@ -811,6 +1006,7 @@ async function init(){
   el("btn_refresh").addEventListener("click", async ()=>{
     saveFormIntoCfg();
     await apiPost("/api/config", cfg);
+    snapshotSavedAllow();
     setStatus("Lade Playlist...");
     const res = await apiPost("/api/refresh", {});
     catalog = res.catalog;
@@ -823,14 +1019,31 @@ async function init(){
     setStatus(`Playlist geladen. LiveTV: ${catalog.livetv.total}, Movies: ${catalog.movies.total}, Series: ${catalog.series.total}`);
   });
 
-  // Run sync
-  el("btn_run").addEventListener("click", async ()=>{
+// Run sync
+el("btn_run").addEventListener("click", async () => {
+  await runWithOverlay(async () => {
+    // erst UI -> cfg speichern + server config updaten
+    saveFormIntoCfg();
+    await apiPost("/api/config", cfg);
+
+    // IMPORTANT:
+    // Snapshot hier ist okay (als "saved before run"),
+    // aber nach dem Run MUSS er nochmal neu gesetzt werden.
+    snapshotSavedAllow();
+
     setStatus("Sync läuft...");
     const res = await apiPost("/api/run", {});
-    setStatus(`Fertig: +${res.run.result.created} neu, ${res.run.result.updated} updated, ${res.run.result.deleted} gelöscht, ${res.run.result.skipped_not_allowed} nicht erlaubt.`);
-    // NEW: refresh "added" box after run
+    setStatus(
+      `Fertig: +${res.run.result.created} neu, ${res.run.result.updated} updated, ${res.run.result.deleted} gelöscht, ${res.run.result.skipped_not_allowed} nicht erlaubt.`
+    );
+
+    // >>> Pending sofort korrekt + Liste neu rendern (OHNE Filter-Toggle)
+    await refreshUiAfterRun();
+
+    // changes box aktualisieren
     await loadChangesBox();
-  });
+  }, "Sync startet…");
+});
 
   // Search inputs
   ["search_livetv_cat","search_livetv_items","search_movies_cat","search_movies_items","search_series_show","search_series_eps"].forEach(id=>{
@@ -919,11 +1132,11 @@ async function init(){
       wrap.style.flexWrap = "wrap";
 
       const b1 = document.createElement("button");
-      b1.textContent = "Alle Kategorien auswählen";
+      b1.textContent = "Alle auswählen";
       b1.addEventListener("click", ()=>{ if(!catalog) return; setAllCategories(kind, true); });
 
       const b2 = document.createElement("button");
-      b2.textContent = "Alle Kategorien abwählen";
+      b2.textContent = "Alle abwählen";
       b2.addEventListener("click", ()=>{ if(!catalog) return; setAllCategories(kind, false); });
 
       wrap.appendChild(b1);
@@ -1012,7 +1225,7 @@ async function init(){
     card.appendChild(btn);
   })();
 
-  // NEW: inject & load "added changes" UI
+  // Changes UI
   injectChangesUI();
   await loadChangesBox();
 
@@ -1040,12 +1253,248 @@ async function init(){
 
   const st = await apiGet("/api/status");
   if(st.last_run){
-    setStatus(`Letzter Run: ${fmtDE(st.last_run.time)} (${st.last_run.reason})`);
+    setStatus(`...`);
+    setStatusTop(`Letzter Run: ${fmtDE(st.last_run.time)} (${st.last_run.reason})`);
   } else if(st.has_catalog){
     setStatus("Catalog geladen (cached). Du kannst Auswahl ändern, ohne Playlist neu zu laden.");
   } else {
     setStatus("Noch kein Run. Erst Playlist laden, auswählen, speichern.");
+    setStatusTop(`Noch kein Run.`);
+  }
+}
+
+// ===============================
+// RUN UI (Overlay + Lock) + Refresh
+// ===============================
+let __runOverlay = null;
+let __runOverlayTimer = null;
+
+function ensureRunOverlay() {
+  if (__runOverlay) return __runOverlay;
+
+  // inject minimal CSS once
+  const style = document.createElement("style");
+  style.textContent = `
+    .run-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999;
+    }
+    .run-card {
+      width: min(520px, calc(100vw - 40px));
+      background: #111;
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .run-title { font-weight: 700; font-size: 16px; margin-bottom: 8px; }
+    .run-msg { font-size: 13px; opacity: 0.9; margin-bottom: 12px; white-space: pre-wrap; }
+    .run-bar {
+      height: 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .run-bar > div {
+      height: 100%;
+      width: 35%;
+      background: rgba(255,255,255,0.85);
+      border-radius: 999px;
+      transform: translateX(-120%);
+      animation: runbar 1.15s infinite linear;
+    }
+    @keyframes runbar {
+      0%   { transform: translateX(-120%); }
+      100% { transform: translateX(320%); }
+    }
+    .run-hint { margin-top: 10px; font-size: 12px; opacity: 0.75; }
+  `;
+  document.head.appendChild(style);
+
+  // build overlay DOM
+  const ov = document.createElement("div");
+  ov.className = "run-overlay";
+  ov.style.display = "none";
+  ov.innerHTML = `
+    <div class="run-card">
+      <div class="run-title">Sync läuft…</div>
+      <div class="run-msg" id="run_overlay_msg">Bitte warten. Währenddessen sind alle Eingaben gesperrt.</div>
+      <div class="run-bar"><div></div></div>
+      <div class="run-hint" id="run_overlay_hint">Du kannst das Fenster offen lassen – es aktualisiert sich automatisch.</div>
+    </div>
+  `;
+  document.body.appendChild(ov);
+  __runOverlay = ov;
+  return ov;
+}
+
+function setUiDisabled(disabled) {
+  // disable all buttons/inputs/selects except inside overlay
+  const els = document.querySelectorAll("button, input, select, textarea");
+  for (const el of els) {
+    if (__runOverlay && __runOverlay.contains(el)) continue;
+    // do not disable password/login basic auth prompts etc. (not relevant here)
+    el.disabled = !!disabled;
+  }
+}
+
+function showRunOverlay(message) {
+  const ov = ensureRunOverlay();
+  const msg = ov.querySelector("#run_overlay_msg");
+  if (msg && message) msg.textContent = message;
+  ov.style.display = "flex";
+
+  // optional: rotate status messages while running
+  const steps = [
+    "Sync läuft… Playlist wird verarbeitet…",
+    "Sync läuft… STRM Dateien werden geschrieben…",
+    "Sync läuft… Aufräumen & Löschen…",
+    "Sync läuft… Abschlussarbeiten…",
+  ];
+  let i = 0;
+  clearInterval(__runOverlayTimer);
+  __runOverlayTimer = setInterval(() => {
+    const m = ov.querySelector("#run_overlay_msg");
+    if (m) m.textContent = steps[i++ % steps.length];
+  }, 1200);
+
+  setUiDisabled(true);
+}
+
+function hideRunOverlay() {
+  if (!__runOverlay) return;
+  clearInterval(__runOverlayTimer);
+  __runOverlayTimer = null;
+  __runOverlay.style.display = "none";
+  setUiDisabled(false);
+}
+
+/**
+ * IMPORTANT:
+ * After a run, reload config + catalog (cached) and re-render lists using the CURRENT filter/search
+ * so "Pending" immediately disappears without touching the global filter.
+ *
+ * You must adapt the 3 hook-functions below to YOUR app.js names.
+ * If you already have these functions, just map them accordingly.
+ */
+async function afterRunRefreshUi() {
+  // 1) reload server config so pending flags can resolve
+  try {
+    if (typeof loadConfigFromServer === "function") {
+      await loadConfigFromServer();
+    } else if (typeof loadConfig === "function") {
+      // common fallback name
+      await loadConfig();
+    } else {
+      // last-resort: fetch and store globally if your code uses a global config var
+      // const cfg = await apiGet("/api/config");
+      // window.APP_CONFIG = cfg;
+    }
+  } catch (e) {
+    console.warn("afterRunRefreshUi: config reload failed", e);
+  }
+
+  // 2) reload catalog cache (so selections reflect latest data)
+  try {
+    if (typeof loadCatalogCached === "function") {
+      await loadCatalogCached();
+    } else if (typeof refreshCatalogCached === "function") {
+      await refreshCatalogCached();
+    } else {
+      // optional:
+      // await apiGet("/api/catalog_cached");
+    }
+  } catch (e) {
+    console.warn("afterRunRefreshUi: catalog reload failed", e);
+  }
+
+  // 3) re-render lists while KEEPING current filter/search state
+  // (this is the key point: no manual filter toggle needed)
+  try {
+    if (typeof renderAllLists === "function") {
+      renderAllLists(); // ideally uses current filter/search already in your state
+    } else if (typeof applyCurrentFilters === "function") {
+      applyCurrentFilters();
+    } else if (typeof refreshAllViews === "function") {
+      refreshAllViews();
+    }
+  } catch (e) {
+    console.warn("afterRunRefreshUi: render failed", e);
+  }
+}
+
+/**
+ * Wrap an async action so UI is locked + overlay shown until it finishes.
+ */
+async function runWithOverlay(fn, startMsg) {
+  showRunOverlay(startMsg || "Sync läuft…");
+  try {
+    return await fn();
+  } finally {
+    hideRunOverlay();
   }
 }
 
 init().catch(err=>{ setStatus("Fehler: " + err.message); });
+
+/**
+ * Nach dem Run:
+ * - cfg vom Server neu holen
+ * - snapshotSavedAllow() neu setzen (damit Pending sofort weg ist)
+ * - catalog_cached neu holen (optional aber sinnvoll)
+ * - renderAll() aufrufen (damit Listboxen ohne Filter-Toggle neu aufgebaut werden)
+ */
+async function refreshUiAfterRun() {
+  // current UI state merken
+  const prevLiveCat = selectedLiveCat;
+  const prevMovieCat = selectedMovieCat;
+  const prevShow = selectedShow;
+
+  try {
+    // 1) Config neu laden (Source of truth)
+    const newCfg = await apiGet("/api/config");
+    cfg = newCfg;
+    ensureAllow();
+    loadForm();
+
+    // 2) Snapshot NEU setzen -> Pending verschwindet sofort
+    snapshotSavedAllow();
+
+    // 3) Catalog cached neu laden (damit du denselben Datenstand hast wie Server)
+    //    (Wenn es noch keinen cached catalog gibt, ignorieren)
+    try {
+      const cached = await apiGet("/api/catalog_cached");
+      if (cached && cached.catalog) {
+        catalog = cached.catalog;
+      }
+    } catch (e) {
+      // ok
+    }
+
+    // 4) Selections wiederherstellen, falls möglich
+    if (catalog) {
+      const liveKeys = Object.keys(catalog?.livetv?.categories || {});
+      const movieKeys = Object.keys(catalog?.movies?.categories || {});
+      const showKeys = Object.keys(catalog?.series?.shows || {});
+
+      selectedLiveCat = (prevLiveCat && liveKeys.includes(prevLiveCat)) ? prevLiveCat : (sortAlphaDE(liveKeys)[0] || null);
+      selectedMovieCat = (prevMovieCat && movieKeys.includes(prevMovieCat)) ? prevMovieCat : (sortAlphaDE(movieKeys)[0] || null);
+      selectedShow = (prevShow && showKeys.includes(prevShow)) ? prevShow : (sortAlphaDE(showKeys)[0] || null);
+
+      // 5) renderAll nutzt deinen global filter/search state automatisch
+      renderAll();
+    }
+  } catch (e) {
+    console.warn("refreshUiAfterRun failed", e);
+    // fallback: zumindest Snapshot + rerender versuchen
+    try {
+      snapshotSavedAllow();
+      if (catalog) renderAll();
+    } catch (e2) {}
+  }
+}
