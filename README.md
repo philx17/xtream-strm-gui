@@ -1,38 +1,3 @@
-# xtream-strm-gui (GHCR-ready)
-
-Dieses ZIP ist ein **fertiges GitHub-Repo**:
-- FastAPI Web-GUI (Xtream Credentials, Auswahl, Sync, Cleanup)
-- Speichert Playlist + Catalog lokal in `/data`
-- Erzeugt `.strm` Dateien nach `/output`
-- GitHub Actions Workflow baut & published nach **GHCR** (`ghcr.io/philx17/xtream-strm-gui:latest`)
-- Dockerfile enthält **vim**
-
-## Ordner-Mounts (Unraid)
-- Host: `/mnt/user/appdata/xtream-strm-gui`  -> Container: `/data`
-- Host: `/mnt/user/Media/JellyfinPlugin`     -> Container: `/output`
-
-## Unraid
-Repository im Container:
-`ghcr.io/<github-user>/<repo>:latest`
-
-Port:
-- Container: 8787
-- Host: 8787 (oder frei)
-
-ENV (optional):
-- `TZ=Europe/Berlin`
-- `GUI_USER=admin`
-- `GUI_PASS=deinpasswort`
-
-## Lokal testen
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python -m app.main
-```
-GUI: http://localhost:8787
-
 # 📺 Xtream STRM Sync Tool
 
 **Xtream → STRM Export mit LiveTV-Picons, Backdrops, Dedupe, Cleanup &
@@ -145,6 +110,34 @@ State-Datei:
 4.  Jellyfin scannt Medien
 
 ------------------------------------------------------------------------
+
+
+## Ordner-Mounts (Unraid)
+- Host: `/mnt/user/appdata/xtream-strm-gui`  -> Container: `/data`
+- Host: `/mnt/user/Media/JellyfinPlugin`     -> Container: `/output`
+
+## Unraid
+Repository im Container:
+`ghcr.io/<github-user>/<repo>:latest`
+
+Port:
+- Container: 8787
+- Host: 8787 (oder frei)
+
+ENV (optional):
+- `TZ=Europe/Berlin`
+- `GUI_USER=admin`
+- `GUI_PASS=deinpasswort`
+
+## Lokal testen
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m app.main
+```
+GUI: http://localhost:8787
+
 
 ## ❤️ Credits
 
