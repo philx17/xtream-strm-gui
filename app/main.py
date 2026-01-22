@@ -1,6 +1,8 @@
 import os
 import json
 import shutil
+import hashlib
+import re
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -15,8 +17,9 @@ from apscheduler.triggers.cron import CronTrigger
 from urllib.request import urlopen, Request as UrlReq
 from urllib.parse import quote
 
-from .m3u_core import build_catalog
+from .m3u_core import build_catalog, parse_m3u, classify_item, extract_show_season_episode, clean_lang_tags
 from .sync_core import run_sync
+
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "/data")).resolve()
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "/output")).resolve()
@@ -29,6 +32,9 @@ CONFIG_PATH = DATA_DIR / "config.json"
 PLAYLIST_PATH = DATA_DIR / "playlist.m3u"
 CATALOG_PATH = DATA_DIR / "catalog.json"
 LASTRUN_PATH = DATA_DIR / "last_run.json"
+
+# NEW: playlist snapshot (to detect new playlist items)
+PLAYLIST_SNAPSHOT_PATH = DATA_DIR / "playlist_snapshot.json"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -161,6 +167,194 @@ def remaining_time(exp_dt: datetime):
     return secs
 
 
+# ---------------------------
+# NEW: Playlist change tracker
+# ---------------------------
+def _sha256(s: str) -> str:
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+
+def _clean_group(s: str) -> str:
+    s = (s or "").strip()
+    s = re.sub(r"\s+", " ", s)
+    return s or "Ungrouped"
+
+
+def _utc_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _build_playlist_snapshot(m3u_text: str) -> dict:
+    """
+    Snapshot of ALL playlist items (independent of selection).
+    We key by sha256(url) because url is usually unique in Xtream lists.
+    """
+    items = {}
+    for it in parse_m3u(m3u_text):
+        attrs = it["attrs"]
+        url = (it.get("url") or "").strip()
+        title = it.get("title") or ""
+        if not url:
+            continue
+
+        group = _clean_group(attrs.get("group-title") or "Ungrouped")
+        tvg_name = attrs.get("tvg-name") or title
+        kind0 = classify_item(url, group, tvg_name, title)
+
+        # normalize kind to GUI buckets
+        if kind0 == "movie":
+            kind = "movies"
+        elif kind0 == "series":
+            kind = "series"
+        else:
+            kind = "livetv"
+
+        show = None
+        season = None
+        episode = None
+        if kind == "series":
+            s, se, epn, _ = extract_show_season_episode(tvg_name)
+            show = s or clean_lang_tags(tvg_name)
+            try:
+                season = int(se or 0)
+            except Exception:
+                season = 0
+            try:
+                episode = int(epn or 0)
+            except Exception:
+                episode = 0
+
+        key = _sha256(url)
+        items[key] = {
+            "kind": kind,
+            "group": group if kind != "series" else None,
+            "show": show if kind == "series" else None,
+            "season": season if kind == "series" else None,
+            "episode": episode if kind == "series" else None,
+            "title": tvg_name,
+            "url": url,
+        }
+    return {"generated_at": _utc_iso(), "items": items}
+
+
+def _read_snapshot():
+    if not PLAYLIST_SNAPSHOT_PATH.exists():
+        return None
+    try:
+        return json.loads(PLAYLIST_SNAPSHOT_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _write_snapshot(snap: dict):
+    PLAYLIST_SNAPSHOT_PATH.write_text(json.dumps(snap, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _write_changes_files(out_dir: Path, added_items: list, counts: dict):
+    """
+    Writes playlist-change files (ONLY added items):
+      - out_dir/changes_latest.json
+      - out_dir/changes_latest.txt
+      - out_dir/changes_history.jsonl
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "time": _utc_iso(),
+        "counts": counts,
+        "added": added_items[:20],  # hard cap for GUI
+        "added_total": counts.get("total", 0),
+        "note": "Playlist changes (global). Only newly detected playlist items are listed here.",
+    }
+
+    (out_dir / "changes_latest.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    lines = []
+    lines.append(f"Xtream Playlist – Neue Inhalte ({payload['time']})")
+    lines.append(
+        f"Total neu: {counts.get('total',0)} | LiveTV: {counts.get('livetv',0)} | Movies: {counts.get('movies',0)} | Series: {counts.get('series',0)}"
+    )
+    lines.append("")
+
+    if counts.get("total", 0) == 0:
+        lines.append("Keine neuen Inhalte.")
+    else:
+        def sk(it):
+            return (
+                (it.get("kind") or ""),
+                (it.get("group") or it.get("show") or ""),
+                (it.get("title") or ""),
+            )
+
+        for it in sorted(added_items[:20], key=sk):
+            kind = (it.get("kind") or "unknown").upper()
+            grp = it.get("group") or it.get("show") or "Ungrouped"
+            title = it.get("title") or ""
+            lines.append(f"{kind} [{grp}] {title}")
+
+        if counts.get("total", 0) > 20:
+            lines.append("")
+            lines.append(f"... und {counts.get('total',0)-20} weitere")
+
+    (out_dir / "changes_latest.txt").write_text("\n".join(lines), encoding="utf-8")
+
+    hist = out_dir / "changes_history.jsonl"
+    with hist.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def track_playlist_changes(m3u_text: str, out_dir: Path):
+    """
+    Compare current playlist snapshot with previous snapshot.
+    Only track ADDED items (not deletes/updates) as requested.
+    """
+    old = _read_snapshot()
+    new = _build_playlist_snapshot(m3u_text)
+
+    old_items = (old or {}).get("items") or {}
+    new_items = (new or {}).get("items") or {}
+
+    old_keys = set(old_items.keys())
+    new_keys = set(new_items.keys())
+
+    added_keys = sorted(list(new_keys - old_keys))
+
+    added_items = []
+    counts = {"livetv": 0, "movies": 0, "series": 0, "total": 0}
+
+    for k in added_keys:
+        it = new_items.get(k) or {}
+        kind = it.get("kind") or "livetv"
+        added_items.append(
+            {
+                "kind": kind,
+                "group": it.get("group"),
+                "show": it.get("show"),
+                "season": it.get("season"),
+                "episode": it.get("episode"),
+                "title": it.get("title"),
+            }
+        )
+        if kind in counts:
+            counts[kind] += 1
+        counts["total"] += 1
+
+    # Sort and keep the full list in counts_total; JSON will carry first 20
+    added_items.sort(
+        key=lambda x: (
+            (x.get("kind") or ""),
+            (x.get("group") or x.get("show") or ""),
+            (x.get("title") or ""),
+        )
+    )
+
+    _write_snapshot(new)
+    _write_changes_files(out_dir, added_items, counts)
+
+    return {"counts": counts, "added_preview": added_items[:20]}
+
+
 scheduler = BackgroundScheduler()
 
 
@@ -196,6 +390,13 @@ def do_sync_run(reason: str):
     out_dir = Path(cfg["paths"].get("out_dir") or str(OUTPUT_DIR)).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # NEW: track playlist changes globally (independent of selection)
+    try:
+        track_playlist_changes(m3u_text, out_dir)
+    except Exception:
+        pass
+
+    # STRM sync still runs (selection-based), but changes UI is now playlist-based
     res = run_sync(
         m3u_text=m3u_text,
         out_dir=out_dir,
@@ -203,6 +404,7 @@ def do_sync_run(reason: str):
         sync_delete=bool(sync_cfg.get("sync_delete", True)),
         prune_sidecars=bool(sync_cfg.get("prune_sidecars", False)),
     )
+
     payload = {"time": datetime.now().isoformat(timespec="seconds"), "reason": reason, "result": res}
     write_last_run(payload)
     return payload
@@ -243,6 +445,15 @@ def api_refresh(request: Request):
     text = download_playlist(cfg)
     cat = build_catalog(text)
     write_catalog(cat)
+
+    # NEW: track playlist changes also on refresh
+    out_dir = Path(cfg["paths"].get("out_dir") or str(OUTPUT_DIR)).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        track_playlist_changes(text, out_dir)
+    except Exception:
+        pass
+
     return JSONResponse({"ok": True, "catalog": cat})
 
 
@@ -265,6 +476,21 @@ def api_catalog_cached(request: Request):
     return JSONResponse({"ok": True, "catalog": cat})
 
 
+@app.get("/api/changes_latest")
+def api_changes_latest(request: Request):
+    require_auth(request)
+    cfg = load_config()
+    out_dir = Path(cfg["paths"].get("out_dir") or str(OUTPUT_DIR)).resolve()
+    p = out_dir / "changes_latest.json"
+    if not p.exists():
+        return JSONResponse({"ok": True, "has_changes": False, "data": None})
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return JSONResponse({"ok": False, "has_changes": False, "error": "changes_latest.json is invalid"}, status_code=500)
+    return JSONResponse({"ok": True, "has_changes": True, "data": data})
+
+
 @app.post("/api/run")
 def api_run(request: Request):
     require_auth(request)
@@ -277,6 +503,18 @@ def api_status(request: Request):
     require_auth(request)
     cfg = load_config()
     last = read_last_run()
+
+    out_dir = Path(cfg["paths"].get("out_dir") or str(OUTPUT_DIR)).resolve()
+    changes_path = out_dir / "changes_latest.json"
+
+    has_changes = changes_path.exists()
+    changes = None
+    if has_changes:
+        try:
+            changes = json.loads(changes_path.read_text(encoding="utf-8"))
+        except Exception:
+            changes = None
+
     return JSONResponse(
         {
             "ok": True,
@@ -287,6 +525,9 @@ def api_status(request: Request):
             "catalog_path": str(CATALOG_PATH),
             "output_dir": cfg.get("paths", {}).get("out_dir"),
             "last_run": last,
+            "has_changes_latest": has_changes,
+            "changes_latest_path": str(changes_path),
+            "changes_latest": changes,
         }
     )
 

@@ -2,11 +2,16 @@ import json
 import time
 import hashlib
 import re
+import shutil
 from pathlib import Path
+from difflib import SequenceMatcher
 
 from .m3u_core import parse_m3u, classify_item, extract_show_season_episode, clean_lang_tags
 
 
+# -------------------------
+# Helpers: filenames
+# -------------------------
 def safe_name(s: str, max_len: int = 180) -> str:
     s = (s or "").strip()
     s = re.sub(r"\s+", " ", s)
@@ -35,6 +40,25 @@ def write_strm(path: Path, url: str) -> bool:
     return True
 
 
+def write_binary_if_changed(dst: Path, src: Path) -> bool:
+    """
+    Copy src -> dst only if content differs (cheap check: size+mtime then bytes if needed).
+    """
+    dst.parent.mkdir(parents=True, exist_ok=True)
+
+    if dst.exists():
+        try:
+            if dst.stat().st_size == src.stat().st_size:
+                # fast path: if same size and same sha256, skip
+                if sha256(src.read_bytes().hex()) == sha256(dst.read_bytes().hex()):
+                    return False
+        except Exception:
+            pass
+
+    shutil.copyfile(src, dst)
+    return True
+
+
 def remove_if_empty_dirs(start_dir: Path, stop_at: Path):
     cur = start_dir
     while True:
@@ -47,6 +71,9 @@ def remove_if_empty_dirs(start_dir: Path, stop_at: Path):
         cur = cur.parent
 
 
+# -------------------------
+# Allowlist
+# -------------------------
 def allow_item(kind: str, group: str, tvg_name: str, show: str, allow_cfg: dict) -> bool:
     """
     Allowlist logic:
@@ -77,7 +104,157 @@ def allow_item(kind: str, group: str, tvg_name: str, show: str, allow_cfg: dict)
     return False
 
 
-def run_sync(m3u_text: str, out_dir: Path, allow_cfg: dict, sync_delete: bool = True, prune_sidecars: bool = False):
+# -------------------------
+# LiveTV Folder name (FIXED: uses your proven terminal logic)
+# -------------------------
+def channel_folder_from_name(name: str) -> str:
+    """
+    Uses simple separator cutting (no regex) + removes ONLY known country prefixes.
+    Example: "DE: SAT 1 HD" -> "SAT 1 HD"
+             "CH | SRF 1 HD" -> "SRF 1 HD"
+             "DE_ VOX HEVC" -> "VOX HEVC"
+             "DE- RTL 2 FHD" -> "RTL 2 FHD"
+    """
+    def strip_country_prefix(s: str) -> str:
+        # only remove these exact prefixes (case-insensitive)
+        prefixes = ['DE', 'AT', 'CH', 'GER', 'EU', 'UK', 'US', 'FR', 'IT', 'ES', 'NL', 'PL']
+        out = s
+        for _ in range(2):
+            t = out.lstrip()
+            sp = t.find(' ')
+            if sp == -1:
+                return out
+            token = t[:sp].strip()
+            token_up = token.upper().rstrip(':|_-')
+            if token_up in prefixes:
+                out = t[sp+1:]
+                continue
+            return out
+        return out
+
+    s = (name or '').strip()
+
+    # cut ONCE right of first matching separator, in priority
+    if ':' in s:
+        s = s.split(':', 1)[1]
+    elif '|' in s:
+        s = s.split('|', 1)[1]
+    elif '_' in s:
+        s = s.split('_', 1)[1]
+    elif '-' in s:
+        s = s.split('-', 1)[1]
+
+    s = s.lstrip()
+    s = ' '.join(s.split())
+
+    # remove only known country prefixes
+    s = strip_country_prefix(s)
+    s = s.lstrip()
+    s = ' '.join(s.split())
+
+    return s
+
+
+# -------------------------
+# Picon Matching
+# -------------------------
+IGNORE_TOKENS = {
+    # quality / variants
+    "sd", "hd", "fhd", "uhd", "hevc", "hvec",
+    "4k", "8k",
+    # generic words
+    "tv", "channel", "sender",
+    "backup",
+    # countries / regions (often prefixes)
+    "de", "at", "ch", "ger", "eu",
+}
+
+def _split_alnum_boundaries(s: str) -> str:
+    # "sat1hd" -> "sat 1 hd", "dazn2" -> "dazn 2", "laliga2" -> "laliga 2"
+    s = re.sub(r"([a-zA-Z])([0-9])", r"\1 \2", s)
+    s = re.sub(r"([0-9])([a-zA-Z])", r"\1 \2", s)
+    return s
+
+def _normalize_text_for_tokens(s: str) -> str:
+    s = (s or "").strip()
+
+    # cut right of separator once (priority)
+    for sep in [":", "|", "_", "-"]:
+        if sep in s:
+            s = s.split(sep, 1)[1]
+            break
+
+    s = s.strip()
+    s = s.replace("&", " and ")
+
+    # remove "(1)" "(2)" etc
+    s = re.sub(r"\(\s*\d+\s*\)", " ", s)
+
+    s = _split_alnum_boundaries(s)
+
+    # re-join 4k / 8k if split into "4 k"
+    s = re.sub(r"\b4\s+k\b", "4k", s, flags=re.IGNORECASE)
+    s = re.sub(r"\b8\s+k\b", "8k", s, flags=re.IGNORECASE)
+
+    s = re.sub(r"[^a-zA-Z0-9äöüÄÖÜß ]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip().lower()
+    return s
+
+def _tokens_from(s: str):
+    s = _normalize_text_for_tokens(s)
+    toks = [t for t in s.split(" ") if t and t not in IGNORE_TOKENS]
+    return toks
+
+def _score_tokens(name_toks, file_toks) -> float:
+    ns = " ".join(name_toks)
+    fs = " ".join(file_toks)
+    if not ns or not fs:
+        return 0.0
+    overlap = len(set(name_toks) & set(file_toks))
+    sim = SequenceMatcher(None, ns, fs).ratio()
+    return overlap * 2.0 + sim
+
+def build_picon_index(picon_dir: Path):
+    """
+    Returns list of (path, tokens) for all .png under picon_dir (recursive).
+    """
+    if not picon_dir.exists():
+        return []
+    files = [p for p in picon_dir.rglob("*.png") if p.is_file()]
+    return [(p, _tokens_from(p.stem)) for p in files]
+
+def find_best_picon(picon_index, channel_name: str):
+    """
+    Returns Path of best picon match or None.
+    """
+    nt = _tokens_from(channel_name)
+    if not nt:
+        return None
+
+    best = (0.0, None)
+    for p, ft in picon_index:
+        s = _score_tokens(nt, ft)
+        if s > best[0]:
+            best = (s, p)
+
+    # basic threshold: require at least 1 token overlap meaningfully
+    if best[1] is None:
+        return None
+    if best[0] < 2.2:  # tuned: overlap*2 + sim -> needs overlap>=1 usually
+        return None
+    return best[1]
+
+
+# -------------------------
+# Sync
+# -------------------------
+def run_sync(
+    m3u_text: str,
+    out_dir: Path,
+    allow_cfg: dict,
+    sync_delete: bool = True,
+    prune_sidecars: bool = False
+):
     out_dir = out_dir.resolve()
     state_dir = out_dir / ".xtream_state"
     state_dir.mkdir(parents=True, exist_ok=True)
@@ -105,6 +282,10 @@ def run_sync(m3u_text: str, out_dir: Path, allow_cfg: dict, sync_delete: bool = 
     created = 0
     updated = 0
     skipped = 0
+
+    # picon support: /output/picons (inside out_dir)
+    picon_dir = out_dir / "picons"
+    picon_index = build_picon_index(picon_dir)
 
     for it in parse_m3u(m3u_text):
         attrs = it["attrs"]
@@ -143,12 +324,17 @@ def run_sync(m3u_text: str, out_dir: Path, allow_cfg: dict, sync_delete: bool = 
             target = out_dir / "Movies" / genre_dir / (safe_name(clean_lang_tags(tvg_name)) + ".strm")
 
         else:
+            # livetv
             if not allow_item("livetv", group, tvg_name, None, allow_cfg):
                 skipped += 1
                 continue
 
             cat_dir = safe_name(group)
-            target = out_dir / "LiveTV" / cat_dir / (safe_name(tvg_name) + ".strm")
+            channel_folder = safe_name(channel_folder_from_name(tvg_name))
+            channel_dir = out_dir / "LiveTV" / cat_dir / channel_folder
+
+            # keep original file name (may contain prefix like DE:)
+            target = channel_dir / (safe_name(tvg_name) + ".strm")
 
         desired_paths.add(str(target))
         key = sha256(url)
@@ -159,6 +345,17 @@ def run_sync(m3u_text: str, out_dir: Path, allow_cfg: dict, sync_delete: bool = 
                 updated += 1
             else:
                 created += 1
+
+        # If LiveTV: copy best picon to poster.png in the same channel folder
+        if kind != "series" and kind != "movie":
+            if picon_index:
+                best = find_best_picon(picon_index, tvg_name)
+                if best is not None:
+                    poster = target.parent / "poster.png"
+                    try:
+                        write_binary_if_changed(poster, best)
+                    except Exception:
+                        pass
 
         new_manifest["items"][key] = {
             "kind": kind,
