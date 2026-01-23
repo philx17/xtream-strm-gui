@@ -1,42 +1,16 @@
 <!doctype html>
 <html lang="de">
 <head>
+	<link rel="stylesheet" href="static/style.css">
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Xtream → STRM (Allowlist)</title>
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 18px; }
-    .row { display:flex; gap:16px; flex-wrap: wrap; }
-    .card { border:1px solid #ddd; border-radius:12px; padding:14px; min-width: 320px; flex:1; }
-    input[type=text], input[type=password] { width: 100%; padding:8px; margin-top:6px; border:1px solid #ccc; border-radius:8px; }
-    label { display:block; margin-top:10px; font-size: 13px; color:#333; }
-    button { padding:10px 14px; border-radius:10px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; }
-    button.primary { background:#111; color:#fff; border-color:#111; }
-    .tabs { display:flex; gap:8px; margin: 14px 0; flex-wrap: wrap; }
-    .tab { padding:8px 10px; border-radius:10px; border:1px solid #ddd; cursor:pointer; }
-    .tab.active { background:#111; color:#fff; border-color:#111; }
-    .split { display:flex; gap:12px; }
-    .left { width: 34%; min-width: 280px; border-right:1px solid #eee; padding-right: 12px; }
-    .right { flex:1; }
-    .list { max-height: 420px; overflow:auto; border:1px solid #eee; border-radius:10px; padding:10px; }
-    .small { font-size: 12px; color:#666; }
-    .pill { display:inline-block; padding:2px 8px; border:1px solid #ddd; border-radius:999px; font-size:12px; margin-left:6px; }
-    .muted { color:#777; }
-    .search { width:100%; padding:8px; border:1px solid #ccc; border-radius:10px; margin-bottom:10px; }
-    .actions { display:flex; gap:8px; flex-wrap: wrap; margin-top: 10px; margin: 0px 0px 8px; }
-    .hr { height:1px; background:#eee; margin: 12px 0; }
-    .ok { color: #1a7f37; font-weight: 600; }
-    .bad { color: #b42318; font-weight: 600; }
-    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
-    .kv { border:1px solid #eee; border-radius:10px; padding:10px; }
-    .kv b { display:block; font-size: 12px; color:#444; }
-    .kv span { display:block; margin-top: 4px; }
-  </style>
 </head>
 <body>
-  <h2>Xtream → STRM (Allowlist)</h2>
+  <h2>Xtream → STRM</h2>
   <div class="row">
     <div class="card">
+      <p id="statusTop" class="small muted"></p>
       <h3>Server</h3>
       <label>Base URL (z.B. http://host:port)
         <input id="base_url" type="text" placeholder="http://..." />
@@ -58,6 +32,24 @@
 
       <label><input id="sync_delete" type="checkbox"/> Entfernte Einträge lokal löschen (.strm)</label>
       <label><input id="prune_sidecars" type="checkbox"/> Beim Löschen auch Sidecars entfernen (jpg/nfo etc.)</label>
+
+      <!-- NEW: LiveTV Export mode -->
+      <div class="hr"></div>
+      <h4 style="margin: 0 0 4px;">LiveTV Export</h4>
+      <div class="radio-row">
+        <label for="livetv_export_strm">
+          <input id="livetv_export_strm" name="livetv_export_mode" type="radio" value="strm" checked>
+          <span>STRM + poster/backdrop (Ordner je Sender)</span>
+        </label>
+        <label for="livetv_export_m3u">
+          <input id="livetv_export_m3u" name="livetv_export_mode" type="radio" value="m3u">
+          <span>M3U Playlist (livetv.m3u) + tvg-logo (Picons)</span>
+        </label>
+      </div>
+      <div class="hint">
+        Hinweis: M3U nutzt <code>group-title</code> aus der Kategorie und setzt <code>tvg-logo</code> anhand des besten Picon-Matches.
+        (In Schritt 2/3 verdrahten wir das im JS + Backend.)
+      </div>
 
       <div class="hr"></div>
 
@@ -145,4 +137,3 @@
 <script src="/static/app.js"></script>
 </body>
 </html>
-
