@@ -186,6 +186,16 @@ function setTab(tab){
 
 // ---------- Config shape ----------
 function ensureAllow(){
+  // ensure root blocks exist
+  cfg.xtream = cfg.xtream || {};
+  cfg.paths = cfg.paths || {};
+  cfg.sync = cfg.sync || {};
+  cfg.schedule = cfg.schedule || {};
+
+  // NEW: LiveTV export mode
+  // "strm" (default) or "m3u"
+  if(!cfg.sync.livetv_export) cfg.sync.livetv_export = "strm";
+
   cfg.allow = cfg.allow || {};
   cfg.allow.livetv = cfg.allow.livetv || {categories:[], titles:[], full_categories:[]};
   cfg.allow.movies = cfg.allow.movies || {categories:[], titles:[], full_categories:[]};
@@ -211,6 +221,20 @@ function loadForm(){
 
   el("sched_enabled").checked = !!cfg.schedule.enabled;
   el("sched_time").value = cfg.schedule.daily_time || "03:30";
+
+  // NEW: LiveTV export radios (safe if HTML not updated yet)
+  const mode = (cfg.sync && cfg.sync.livetv_export) ? String(cfg.sync.livetv_export) : "strm";
+  const rStrm = el("livetv_export_strm");
+  const rM3u  = el("livetv_export_m3u");
+  if(rStrm && rM3u){
+    if(mode === "m3u"){
+      rM3u.checked = true;
+      rStrm.checked = false;
+    }else{
+      rStrm.checked = true;
+      rM3u.checked = false;
+    }
+  }
 }
 
 function saveFormIntoCfg(){
@@ -223,6 +247,16 @@ function saveFormIntoCfg(){
 
   cfg.sync.sync_delete = el("sync_delete").checked;
   cfg.sync.prune_sidecars = el("prune_sidecars").checked;
+
+  // NEW: LiveTV export mode
+  const rStrm = el("livetv_export_strm");
+  const rM3u  = el("livetv_export_m3u");
+  if(rStrm && rM3u){
+    cfg.sync.livetv_export = rM3u.checked ? "m3u" : "strm";
+  }else{
+    // fallback if HTML not present
+    cfg.sync.livetv_export = cfg.sync.livetv_export || "strm";
+  }
 
   cfg.schedule.enabled = el("sched_enabled").checked;
   cfg.schedule.daily_time = (el("sched_time").value || "03:30").trim();
@@ -1019,31 +1053,30 @@ async function init(){
     setStatus(`Playlist geladen. LiveTV: ${catalog.livetv.total}, Movies: ${catalog.movies.total}, Series: ${catalog.series.total}`);
   });
 
-// Run sync
-el("btn_run").addEventListener("click", async () => {
-  await runWithOverlay(async () => {
-    // erst UI -> cfg speichern + server config updaten
-    saveFormIntoCfg();
-    await apiPost("/api/config", cfg);
+  // Run sync
+  el("btn_run").addEventListener("click", async () => {
+    await runWithOverlay(async () => {
+      // erst UI -> cfg speichern + server config updaten
+      saveFormIntoCfg();
+      await apiPost("/api/config", cfg);
 
-    // IMPORTANT:
-    // Snapshot hier ist okay (als "saved before run"),
-    // aber nach dem Run MUSS er nochmal neu gesetzt werden.
-    snapshotSavedAllow();
+      // Snapshot hier ist okay (als "saved before run"),
+      // aber nach dem Run MUSS er nochmal neu gesetzt werden.
+      snapshotSavedAllow();
 
-    setStatus("Sync läuft...");
-    const res = await apiPost("/api/run", {});
-    setStatus(
-      `Fertig: +${res.run.result.created} neu, ${res.run.result.updated} updated, ${res.run.result.deleted} gelöscht, ${res.run.result.skipped_not_allowed} nicht erlaubt.`
-    );
+      setStatus("Sync läuft...");
+      const res = await apiPost("/api/run", {});
+      setStatus(
+        `Fertig: +${res.run.result.created} neu, ${res.run.result.updated} updated, ${res.run.result.deleted} gelöscht, ${res.run.result.skipped_not_allowed} nicht erlaubt.`
+      );
 
-    // >>> Pending sofort korrekt + Liste neu rendern (OHNE Filter-Toggle)
-    await refreshUiAfterRun();
+      // >>> Pending sofort korrekt + Liste neu rendern (OHNE Filter-Toggle)
+      await refreshUiAfterRun();
 
-    // changes box aktualisieren
-    await loadChangesBox();
-  }, "Sync startet…");
-});
+      // changes box aktualisieren
+      await loadChangesBox();
+    }, "Sync startet…");
+  });
 
   // Search inputs
   ["search_livetv_cat","search_livetv_items","search_movies_cat","search_movies_items","search_series_show","search_series_eps"].forEach(id=>{
@@ -1338,7 +1371,6 @@ function setUiDisabled(disabled) {
   const els = document.querySelectorAll("button, input, select, textarea");
   for (const el of els) {
     if (__runOverlay && __runOverlay.contains(el)) continue;
-    // do not disable password/login basic auth prompts etc. (not relevant here)
     el.disabled = !!disabled;
   }
 }
@@ -1349,7 +1381,6 @@ function showRunOverlay(message) {
   if (msg && message) msg.textContent = message;
   ov.style.display = "flex";
 
-  // optional: rotate status messages while running
   const steps = [
     "Sync läuft… Playlist wird verarbeitet…",
     "Sync läuft… STRM Dateien werden geschrieben…",
@@ -1372,60 +1403,6 @@ function hideRunOverlay() {
   __runOverlayTimer = null;
   __runOverlay.style.display = "none";
   setUiDisabled(false);
-}
-
-/**
- * IMPORTANT:
- * After a run, reload config + catalog (cached) and re-render lists using the CURRENT filter/search
- * so "Pending" immediately disappears without touching the global filter.
- *
- * You must adapt the 3 hook-functions below to YOUR app.js names.
- * If you already have these functions, just map them accordingly.
- */
-async function afterRunRefreshUi() {
-  // 1) reload server config so pending flags can resolve
-  try {
-    if (typeof loadConfigFromServer === "function") {
-      await loadConfigFromServer();
-    } else if (typeof loadConfig === "function") {
-      // common fallback name
-      await loadConfig();
-    } else {
-      // last-resort: fetch and store globally if your code uses a global config var
-      // const cfg = await apiGet("/api/config");
-      // window.APP_CONFIG = cfg;
-    }
-  } catch (e) {
-    console.warn("afterRunRefreshUi: config reload failed", e);
-  }
-
-  // 2) reload catalog cache (so selections reflect latest data)
-  try {
-    if (typeof loadCatalogCached === "function") {
-      await loadCatalogCached();
-    } else if (typeof refreshCatalogCached === "function") {
-      await refreshCatalogCached();
-    } else {
-      // optional:
-      // await apiGet("/api/catalog_cached");
-    }
-  } catch (e) {
-    console.warn("afterRunRefreshUi: catalog reload failed", e);
-  }
-
-  // 3) re-render lists while KEEPING current filter/search state
-  // (this is the key point: no manual filter toggle needed)
-  try {
-    if (typeof renderAllLists === "function") {
-      renderAllLists(); // ideally uses current filter/search already in your state
-    } else if (typeof applyCurrentFilters === "function") {
-      applyCurrentFilters();
-    } else if (typeof refreshAllViews === "function") {
-      refreshAllViews();
-    }
-  } catch (e) {
-    console.warn("afterRunRefreshUi: render failed", e);
-  }
 }
 
 /**
@@ -1465,8 +1442,7 @@ async function refreshUiAfterRun() {
     // 2) Snapshot NEU setzen -> Pending verschwindet sofort
     snapshotSavedAllow();
 
-    // 3) Catalog cached neu laden (damit du denselben Datenstand hast wie Server)
-    //    (Wenn es noch keinen cached catalog gibt, ignorieren)
+    // 3) Catalog cached neu laden
     try {
       const cached = await apiGet("/api/catalog_cached");
       if (cached && cached.catalog) {
@@ -1486,12 +1462,10 @@ async function refreshUiAfterRun() {
       selectedMovieCat = (prevMovieCat && movieKeys.includes(prevMovieCat)) ? prevMovieCat : (sortAlphaDE(movieKeys)[0] || null);
       selectedShow = (prevShow && showKeys.includes(prevShow)) ? prevShow : (sortAlphaDE(showKeys)[0] || null);
 
-      // 5) renderAll nutzt deinen global filter/search state automatisch
       renderAll();
     }
   } catch (e) {
     console.warn("refreshUiAfterRun failed", e);
-    // fallback: zumindest Snapshot + rerender versuchen
     try {
       snapshotSavedAllow();
       if (catalog) renderAll();
