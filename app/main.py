@@ -73,6 +73,10 @@ def load_config():
                 "sync_delete": True,
                 "prune_sidecars": False,
                 "auto_refresh_playlist": True,
+                # NEW: LiveTV export mode
+                #   - "strm": create LiveTV/*.strm + poster.png/backdrop.png (current behavior)
+                #   - "m3u":  write a LiveTV.m3u playlist (no per-channel folders/files)
+                "livetv_export": "strm",
             },
             "schedule": {"enabled": False, "daily_time": "03:30"},
             "allow": {
@@ -403,6 +407,8 @@ def do_sync_run(reason: str):
         allow_cfg=cfg.get("allow", {}),
         sync_delete=bool(sync_cfg.get("sync_delete", True)),
         prune_sidecars=bool(sync_cfg.get("prune_sidecars", False)),
+        # NEW: LiveTV export mode (sync_core.py will implement behavior)
+        livetv_export=str(sync_cfg.get("livetv_export", "strm")),
     )
 
     payload = {"time": datetime.now().isoformat(timespec="seconds"), "reason": reason, "result": res}
@@ -553,6 +559,16 @@ async def api_cleanup(request: Request):
         if t in targets and p.exists():
             shutil.rmtree(p, ignore_errors=True)
             deleted.append(str(p))
+
+    # ---- NEW: delete LiveTV.m3u if livetv cleanup selected ----
+    if "livetv" in targets:
+        livetv_m3u = out_dir / "LiveTV.m3u"
+        if livetv_m3u.exists() and livetv_m3u.is_file():
+            try:
+                livetv_m3u.unlink()
+                deleted.append(str(livetv_m3u))
+            except Exception:
+                pass
 
     if include_state:
         state_dir = out_dir / ".xtream_state"

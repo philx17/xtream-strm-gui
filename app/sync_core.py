@@ -1,3 +1,4 @@
+# sync_core.py (FINAL) - LiveTV: M3U export option + cleaned names + tvg-chno starts at 1001 + absolute tvg-logo
 import json
 import time
 import hashlib
@@ -37,6 +38,19 @@ def write_strm(path: Path, url: str) -> bool:
         if old == new_text:
             return False
     path.write_text(new_text, encoding="utf-8")
+    return True
+
+
+def write_text_if_changed(path: Path, text: str) -> bool:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        try:
+            old = path.read_text(encoding="utf-8", errors="ignore")
+            if old == text:
+                return False
+        except Exception:
+            pass
+    path.write_text(text, encoding="utf-8")
     return True
 
 
@@ -129,6 +143,15 @@ def channel_folder_from_name(name: str) -> str:
     s = ' '.join(s.split())
 
     return s
+
+
+def clean_livetv_display_name(name: str) -> str:
+    """
+    Removes country prefixes / separators like:
+    'DE: RTL HD' / 'AT | ORF 1' / 'CH_RTS' / 'DE - ZDF'
+    Uses the same proven logic as channel_folder_from_name.
+    """
+    return channel_folder_from_name(name or "").strip()
 
 
 # -------------------------
@@ -271,6 +294,15 @@ def delete_related_files_for_strm(strm_path: Path, prune_sidecars: bool):
 
 
 # -------------------------
+# M3U helpers
+# -------------------------
+def _m3u_escape_attr(s: str) -> str:
+    s = (s or "")
+    s = s.replace("&", "&amp;").replace('"', "&quot;")
+    return s
+
+
+# -------------------------
 # Sync
 # -------------------------
 def run_sync(
@@ -278,7 +310,9 @@ def run_sync(
     out_dir: Path,
     allow_cfg: dict,
     sync_delete: bool = True,
-    prune_sidecars: bool = False
+    prune_sidecars: bool = False,
+    livetv_export: str = "strm",  # "strm" or "m3u"
+	path_jelly_pincon: Path = Path("/data/IPTV_STRM")
 ):
     out_dir = out_dir.resolve()
     state_dir = out_dir / ".xtream_state"
@@ -315,6 +349,9 @@ def run_sync(
     # DEDUPE ONLY FOR MOVIES
     seen_movie_keys = set()
 
+    # collect LiveTV entries for M3U export
+    livetv_m3u_entries = []
+
     for it in parse_m3u(m3u_text):
         attrs = it["attrs"]
         url = it["url"]
@@ -343,6 +380,27 @@ def run_sync(
             base = f"{show} - S{int(season):02d}E{int(epn):02d}"
             target = out_dir / "Series" / show_dir / season_dir / (safe_name(base) + ".strm")
 
+            desired_paths.add(str(target))
+            key = sha256(url)
+
+            changed = write_strm(target, url)
+            if changed:
+                if str(target) in old_paths:
+                    updated += 1
+                else:
+                    created += 1
+
+            new_manifest["items"][key] = {
+                "kind": kind,
+                "group": group,
+                "tvg_name": tvg_name,
+                "path": str(target),
+                "url": url,
+                "show": show,
+                "season": season,
+                "episode": epn,
+            }
+
         elif kind == "movie":
             if not allow_item("movie", group, tvg_name, None, allow_cfg):
                 skipped += 1
@@ -357,50 +415,169 @@ def run_sync(
             genre_dir = safe_name(group.replace("/", "_"))
             target = out_dir / "Movies" / genre_dir / (safe_name(clean_lang_tags(tvg_name)) + ".strm")
 
+            desired_paths.add(str(target))
+            key = sha256(url)
+
+            changed = write_strm(target, url)
+            if changed:
+                if str(target) in old_paths:
+                    updated += 1
+                else:
+                    created += 1
+
+            new_manifest["items"][key] = {
+                "kind": kind,
+                "group": group,
+                "tvg_name": tvg_name,
+                "path": str(target),
+                "url": url,
+                "show": show,
+                "season": season,
+                "episode": epn,
+            }
+
         else:
+            # -------- LiveTV --------
             if not allow_item("livetv", group, tvg_name, None, allow_cfg):
                 skipped += 1
                 continue
 
+            # Cleaned visible name (no DE:/AT| etc.)
+            disp_name = clean_livetv_display_name(tvg_name) or tvg_name
+
+            # Find picon once
+            logo_rel = None
+            best = None
+            if picon_index:
+                best = find_best_picon(picon_index, tvg_name)
+                if best is not None:
+                    # store relative path for manifest / m3u usage
+                    try:
+                        logo_rel = str(best.relative_to(out_dir)).replace("\\", "/")
+                    except Exception:
+                        # if picons are somewhere else, fallback to just filename in picons/
+                        logo_rel = f"picons/{best.name}"
+
+            if (livetv_export or "strm").lower() == "m3u":
+                # collect entry for m3u output
+                livetv_m3u_entries.append({
+                    "group": group,
+                    "tvg_name": tvg_name,
+                    "display_name": disp_name,
+                    "url": url,
+                    "logo_rel": logo_rel,
+                })
+                # still put something into manifest so old LiveTV STRM files get removed if switching export mode
+                # (we won't create any new LiveTV .strm paths)
+                continue
+
+            # default: create STRM + poster/backdrop in folder
             cat_dir = safe_name(group)
             channel_folder = safe_name(channel_folder_from_name(tvg_name))
             channel_dir = out_dir / "LiveTV" / cat_dir / channel_folder
-            target = channel_dir / (safe_name(tvg_name) + ".strm")
+            target = channel_dir / (safe_name(disp_name) + ".strm")
 
-        desired_paths.add(str(target))
-        key = sha256(url)
+            desired_paths.add(str(target))
+            key = sha256(url)
 
-        changed = write_strm(target, url)
+            changed = write_strm(target, url)
+            if changed:
+                if str(target) in old_paths:
+                    updated += 1
+                else:
+                    created += 1
+
+            # copy best picon to poster.png AND backdrop.png in the same channel folder
+            if best is not None:
+                try:
+                    poster = target.parent / "poster.png"
+                    backdrop = target.parent / "backdrop.png"
+                    write_binary_if_changed(poster, best)
+                    write_binary_if_changed(backdrop, best)
+                except Exception:
+                    pass
+
+            new_manifest["items"][key] = {
+                "kind": "livetv",
+                "group": group,
+                "tvg_name": tvg_name,
+                "path": str(target),
+                "url": url,
+                "show": None,
+                "season": None,
+                "episode": None,
+            }
+
+    # --- LiveTV M3U output (rewrite each run) ---
+    if (livetv_export or "strm").lower() == "m3u":
+        m3u_path = out_dir / "LiveTV.m3u"
+        
+
+        livetv_m3u_entries.sort(key=lambda x: (
+            (x.get("group") or "").lower(),
+            (x.get("display_name") or "").lower()
+        ))
+
+        lines = ["#EXTM3U"]
+        chno = 1001  # start
+
+        for e in livetv_m3u_entries:
+            grp_raw = e.get("group") or "Ungrouped"
+            tvg_raw = e.get("tvg_name") or e.get("display_name") or ""
+            url = (e.get("url") or "").strip()
+            if not url:
+                continue
+
+            # cleaned display + tvg-name
+            disp = clean_livetv_display_name(tvg_raw) or tvg_raw.strip()
+            tvg = disp
+
+            grp = _m3u_escape_attr(grp_raw)
+            tvg = _m3u_escape_attr(tvg)
+
+            logo_abs = None
+            
+            if e.get("logo_rel"):
+                logo_abs = (path_jelly_pincon / e["logo_rel"]).as_posix()
+
+            if logo_abs:
+                logo_abs = _m3u_escape_attr(logo_abs)
+                extinf = (
+                    f'#EXTINF:-1 tvg-name="{tvg}" tvg-chno="{chno}" '
+                    f'tvg-logo="{logo_abs}" group-title="{grp}",{disp}'
+                )
+            else:
+                extinf = (
+                    f'#EXTINF:-1 tvg-name="{tvg}" tvg-chno="{chno}" '
+                    f'group-title="{grp}",{disp}'
+                )
+
+            lines.append(extinf)
+            lines.append(url)
+
+            chno += 1
+
+        changed = write_text_if_changed(m3u_path, "\n".join(lines) + "\n")
+        desired_paths.add(str(m3u_path))
+
         if changed:
-            if str(target) in old_paths:
+            if str(m3u_path) in old_paths:
                 updated += 1
             else:
                 created += 1
 
-        # LiveTV: copy best picon to poster.png AND backdrop.png in the same channel folder
-        if kind == "livetv":
-            if picon_index:
-                best = find_best_picon(picon_index, tvg_name)
-                if best is not None:
-                    try:
-                        poster = target.parent / "poster.png"
-                        backdrop = target.parent / "backdrop.png"
-                        write_binary_if_changed(poster, best)
-                        write_binary_if_changed(backdrop, best)
-                    except Exception:
-                        pass
-
-        new_manifest["items"][key] = {
-            "kind": kind,
-            "group": group,
-            "tvg_name": tvg_name,
-            "path": str(target),
-            "url": url,
-            "show": show,
-            "season": season,
-            "episode": epn,
+        new_manifest["items"][sha256("livetv_m3u_export")] = {
+            "kind": "livetv_m3u",
+            "group": None,
+            "tvg_name": None,
+            "path": str(m3u_path),
+            "url": None,
+            "show": None,
+            "season": None,
+            "episode": None,
         }
 
+    # --- deletion (remove files that are no longer desired) ---
     deleted = 0
     sidecars_deleted = 0
 
@@ -408,20 +585,30 @@ def run_sync(
         removed = old_paths - desired_paths
         for p_str in sorted(removed):
             p = Path(p_str)
-            if p.exists() and p.is_file() and p.suffix.lower() == ".strm":
-                try:
-                    p.unlink()
-                    deleted += 1
-                except Exception:
-                    continue
+            if p.exists() and p.is_file():
+                # remove .strm + related images
+                if p.suffix.lower() == ".strm":
+                    try:
+                        p.unlink()
+                        deleted += 1
+                    except Exception:
+                        continue
 
-                try:
-                    delete_related_files_for_strm(p, prune_sidecars=prune_sidecars)
-                    sidecars_deleted += 1
-                except Exception:
-                    pass
+                    try:
+                        delete_related_files_for_strm(p, prune_sidecars=prune_sidecars)
+                        sidecars_deleted += 1
+                    except Exception:
+                        pass
 
-                remove_if_empty_dirs(p.parent, out_dir)
+                    remove_if_empty_dirs(p.parent, out_dir)
+
+                # also remove old LiveTV.m3u if switching away / disappeared
+                elif p.name.lower() == "livetv.m3u":
+                    try:
+                        p.unlink()
+                        deleted += 1
+                    except Exception:
+                        pass
 
     manifest_path.write_text(json.dumps(new_manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -431,4 +618,5 @@ def run_sync(
         "skipped_not_allowed": skipped,
         "deleted": deleted,
         "sidecars_deleted": sidecars_deleted,
+        "livetv_export": (livetv_export or "strm"),
     }
