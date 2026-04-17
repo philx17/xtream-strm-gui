@@ -8,6 +8,8 @@ from .state_core import (
     clear_manifest,
     clear_last_report,
 )
+from typing import Any, Dict, List, Tuple, Optional
+
 
 
 def _safe_int(value: Any, default: Optional[int] = None) -> Optional[int]:
