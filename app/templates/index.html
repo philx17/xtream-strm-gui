@@ -1,139 +1,406 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-	<link rel="stylesheet" href="static/style.css">
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Xtream → STRM (Allowlist)</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>xtream-strm-gui</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #171a21;
+      --panel-2: #1f2430;
+      --line: #2b3242;
+      --text: #f1f5f9;
+      --muted: #9aa4b2;
+      --accent: #4f8cff;
+      --good: #2fb344;
+      --warn: #f59f00;
+      --bad: #e03131;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1, h2, h3 { margin-top: 0; }
+    .grid {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 20px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .panel h2 {
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+    .row {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    label {
+      font-size: 13px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 4px;
+    }
+    input, select, textarea, button {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    button {
+      cursor: pointer;
+      background: var(--accent);
+      border: 0;
+      font-weight: bold;
+    }
+    button.secondary { background: #394150; }
+    button.warn { background: var(--warn); color: #111; }
+    button.danger { background: var(--bad); }
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .actions-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .info-item {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+    }
+    .info-item .k {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .info-item .v {
+      font-size: 14px;
+      font-weight: bold;
+      word-break: break-word;
+    }
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .picker {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+    .picker-head {
+      padding: 10px 12px;
+      background: var(--panel-2);
+      border-bottom: 1px solid var(--line);
+      font-weight: bold;
+    }
+    .picker-body {
+      padding: 12px;
+    }
+    .list {
+      max-height: 240px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      background: #11151d;
+    }
+    .list-item {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      padding: 6px 4px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .list-item:last-child { border-bottom: none; }
+    .small {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .stat {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+    }
+    .stat .n {
+      font-size: 22px;
+      font-weight: bold;
+      margin-top: 6px;
+    }
+    .progress {
+      width: 100%;
+      height: 16px;
+      border-radius: 999px;
+      background: #0b0d12;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      margin-bottom: 10px;
+    }
+    .progress > div {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.2s ease;
+    }
+    .logbox {
+      max-height: 300px;
+      overflow: auto;
+      background: #0b0d12;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      white-space: pre-wrap;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    .changes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .change-box {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+    }
+    ul.compact {
+      margin: 0;
+      padding-left: 18px;
+      max-height: 220px;
+      overflow: auto;
+    }
+    @media (max-width: 1100px) {
+      .grid { grid-template-columns: 1fr; }
+      .stat-grid { grid-template-columns: repeat(2, 1fr); }
+      .actions-3, .actions { grid-template-columns: 1fr; }
+      .changes { grid-template-columns: 1fr; }
+      .info-grid { grid-template-columns: 1fr; }
+    }
+  </style>
 </head>
 <body>
-  <h2>Xtream → STRM</h2>
-  <div class="row">
-    <div class="card">
-      <p id="statusTop" class="small muted"></p>
-      <h3>Server</h3>
-      <label>Base URL (z.B. http://host:port)
-        <input id="base_url" type="text" placeholder="http://..." />
-      </label>
-      <label>Username
-        <input id="username" type="text" />
-      </label>
-      <label>Password
-        <input id="password" type="password" />
-      </label>
-      <label>Output (ts empfohlen)
-        <input id="output" type="text" placeholder="ts oder m3u8" />
-      </label>
-      <label>Output-Verzeichnis (im Container: /output)
-        <input id="out_dir" type="text" />
-      </label>
+  <div class="wrap">
+    <h1>xtream-strm-gui</h1>
 
-      <div class="hr"></div>
+    <div class="grid">
+      <div>
+        <div class="panel">
+          <h2>Verbindung & Profil</h2>
 
-      <label><input id="sync_delete" type="checkbox"/> Entfernte Einträge lokal löschen (.strm)</label>
-      <label><input id="prune_sidecars" type="checkbox"/> Beim Löschen auch Sidecars entfernen (jpg/nfo etc.)</label>
-
-      <!-- NEW: LiveTV Export mode -->
-      <div class="hr"></div>
-      <h4 style="margin: 0 0 4px;">LiveTV Export</h4>
-      <div class="radio-row">
-        <label for="livetv_export_strm">
-          <input id="livetv_export_strm" name="livetv_export_mode" type="radio" value="strm" checked>
-          <span>STRM + poster/backdrop (Ordner je Sender)</span>
-        </label>
-        <label for="livetv_export_m3u">
-          <input id="livetv_export_m3u" name="livetv_export_mode" type="radio" value="m3u">
-          <span>M3U Playlist (livetv.m3u) + tvg-logo (Picons)</span>
-        </label>
-      </div>
-      <div class="hint">
-        Hinweis: M3U nutzt <code>group-title</code> aus der Kategorie und setzt <code>tvg-logo</code> anhand des besten Picon-Matches.
-        (In Schritt 2/3 verdrahten wir das im JS + Backend.)
-      </div>
-
-      <div class="hr"></div>
-
-      <label><input id="sched_enabled" type="checkbox"/> Daily Sync aktivieren</label>
-      <label>Uhrzeit (HH:MM)
-        <input id="sched_time" type="text" placeholder="03:30" />
-      </label>
-
-      <div class="actions">
-        <button id="btn_save" class="primary">Speichern</button>
-        <button id="btn_test">Verbindung testen</button>
-        <button id="btn_refresh">Playlist laden</button>
-        <button id="btn_run">Run now</button>
-      </div>
-      <p id="status" class="small muted"></p>
-
-      <div class="hr"></div>
-      <h4>Status</h4>
-      <div id="conn_box" class="grid2"></div>
-
-      <p class="small muted">
-        Headless-Run ohne GUI: <code>docker exec xtream-strm-gui python -m app.runner</code>
-      </p>
-    </div>
-
-    <div class="card" style="flex:2">
-      <h3>Auswahl (was geladen werden soll)</h3>
-      <div class="tabs">
-        <div class="tab active" data-tab="livetv">LiveTV</div>
-        <div class="tab" data-tab="movies">Filme</div>
-        <div class="tab" data-tab="series">Serien</div>
-      </div>
-
-      <div id="panel_livetv" class="panel">
-        <div class="split">
-          <div class="left">
-            <input id="search_livetv_cat" class="search" placeholder="Kategorie suchen...">
-            <div id="livetv_cats" class="list"></div>
-          </div>
-          <div class="right">
-            <input id="search_livetv_items" class="search" placeholder="Sender suchen...">
-            <div class="actions">
-              <button id="livetv_select_cat">Kategorie auswählen</button>
-              <button id="livetv_clear_cat">Kategorie abwählen</button>
+          <div class="row">
+            <div>
+              <label>Profilname</label>
+              <input id="profileName" placeholder="z. B. Mein IPTV Profil" />
             </div>
-            <div id="livetv_items" class="list"></div>
           </div>
-        </div>
-      </div>
 
-      <div id="panel_movies" class="panel" style="display:none">
-        <div class="split">
-          <div class="left">
-            <input id="search_movies_cat" class="search" placeholder="Kategorie suchen...">
-            <div id="movies_cats" class="list"></div>
-          </div>
-          <div class="right">
-            <input id="search_movies_items" class="search" placeholder="Filme suchen...">
-            <div class="actions">
-              <button id="movies_select_cat">Kategorie auswählen</button>
-              <button id="movies_clear_cat">Kategorie abwählen</button>
+          <div class="row">
+            <div>
+              <label>Base URL</label>
+              <input id="baseUrl" placeholder="http://server:8080" />
             </div>
-            <div id="movies_items" class="list"></div>
+          </div>
+
+          <div class="row-2">
+            <div>
+              <label>Benutzername</label>
+              <input id="username" />
+            </div>
+            <div>
+              <label>Passwort</label>
+              <input id="password" type="password" />
+            </div>
+          </div>
+
+          <div class="actions-3">
+            <button id="btnTestConnection">Verbindung testen</button>
+            <button id="btnLoadCatalog" class="secondary">Kategorien laden</button>
+            <button id="btnSaveProfile" class="secondary">Profil speichern</button>
+          </div>
+
+          <div style="height:10px"></div>
+
+          <div class="actions-3">
+            <select id="profileSelect"></select>
+            <button id="btnLoadProfile" class="secondary">Profil laden</button>
+            <button id="btnDeleteProfile" class="danger">Profil löschen</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Account-Informationen</h2>
+          <div id="accountInfo" class="info-grid"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Ausgabe & Sync</h2>
+
+          <div class="row">
+            <div>
+              <label>Root-Verzeichnis</label>
+              <input id="rootDir" value="/output" />
+            </div>
+          </div>
+
+          <div class="row-2">
+            <div>
+              <label>Movies-Ordner</label>
+              <input id="moviesDir" value="Movies" />
+            </div>
+            <div>
+              <label>Series-Ordner</label>
+              <input id="seriesDir" value="Series" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>LiveTV M3U-Datei</label>
+              <input id="livetvFile" value="livetv.m3u" />
+            </div>
+          </div>
+
+          <div class="row">
+            <label><input type="checkbox" id="deleteRemoved" checked style="width:auto; margin-right:8px;"> Veraltete Dateien automatisch löschen</label>
+          </div>
+
+          <div class="actions">
+            <button id="btnStartExport">Export starten</button>
+            <button id="btnResetOutput" class="warn">Erzeugte Daten löschen</button>
           </div>
         </div>
       </div>
 
-      <div id="panel_series" class="panel" style="display:none">
-        <div class="split">
-          <div class="left">
-            <input id="search_series_show" class="search" placeholder="Show suchen...">
-            <div id="series_shows" class="list"></div>
+      <div>
+        <div class="panel">
+          <h2>Kategorien</h2>
+
+          <div class="picker">
+            <div class="picker-head">LiveTV Kategorien</div>
+            <div class="picker-body">
+              <div class="row-2">
+                <input id="searchLive" placeholder="Suchen..." />
+                <div class="actions">
+                  <button id="btnSelectAllLive" class="secondary">Alle</button>
+                  <button id="btnSelectNoneLive" class="secondary">Keine</button>
+                </div>
+              </div>
+              <div id="liveList" class="list"></div>
+              <div class="small" id="liveSelectedCount">0 ausgewählt</div>
+            </div>
           </div>
-          <div class="right">
-            <input id="search_series_eps" class="search" placeholder="Episoden suchen (optional)...">
-            <div id="series_eps" class="list"></div>
-            <p class="small muted">Tipp: Wenn du eine Show auswählst, werden automatisch alle Folgen dieser Show synchronisiert. Einzelne Episoden-Auswahl ist optional (wenn du keine Show auswählst).</p>
+
+          <div class="picker">
+            <div class="picker-head">Film Kategorien</div>
+            <div class="picker-body">
+              <div class="row-2">
+                <input id="searchMovies" placeholder="Suchen..." />
+                <div class="actions">
+                  <button id="btnSelectAllMovies" class="secondary">Alle</button>
+                  <button id="btnSelectNoneMovies" class="secondary">Keine</button>
+                </div>
+              </div>
+              <div id="movieList" class="list"></div>
+              <div class="small" id="movieSelectedCount">0 ausgewählt</div>
+            </div>
+          </div>
+
+          <div class="picker">
+            <div class="picker-head">Serien Kategorien</div>
+            <div class="picker-body">
+              <div class="row-2">
+                <input id="searchSeries" placeholder="Suchen..." />
+                <div class="actions">
+                  <button id="btnSelectAllSeries" class="secondary">Alle</button>
+                  <button id="btnSelectNoneSeries" class="secondary">Keine</button>
+                </div>
+              </div>
+              <div id="seriesList" class="list"></div>
+              <div class="small" id="seriesSelectedCount">0 ausgewählt</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Status</h2>
+          <div class="progress"><div id="progressBar"></div></div>
+          <div id="statusText" class="small">Bereit.</div>
+          <div style="height:10px"></div>
+          <div id="logBox" class="logbox"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Zusammenfassung letzter Lauf</h2>
+          <div id="summaryStats" class="stat-grid"></div>
+        </div>
+
+        <div class="panel">
+          <div class="section-title">
+            <h2 style="margin:0">Changelog zum vorherigen Lauf</h2>
+            <button id="btnClearReport" class="secondary" style="width:auto">Report leeren</button>
+          </div>
+          <div class="changes">
+            <div class="change-box">
+              <h3>Neu hinzugefügt</h3>
+              <ul id="addedList" class="compact"></ul>
+            </div>
+            <div class="change-box">
+              <h3>Gelöscht</h3>
+              <ul id="removedList" class="compact"></ul>
+            </div>
           </div>
         </div>
       </div>
-
     </div>
   </div>
 
-<script src="/static/app.js"></script>
+  <script src="/static/app.js"></script>
 </body>
 </html>
