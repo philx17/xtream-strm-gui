@@ -183,3 +183,7 @@ async def api_output_reset(payload: ResetPayload):
         return JSONResponse({"ok": True, "result": result})
     except Exception as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8787, reload=False)
