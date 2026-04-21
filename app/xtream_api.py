@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 import requests
 
 DEFAULT_TIMEOUT = 45
-USER_AGENT = "xtream-strm-gui/1.0"
+USER_AGENT = "xtream-strm-gui/1.1"
 
 
 def _safe_int(value: Any, default: Optional[int] = None) -> Optional[int]:
@@ -264,6 +264,24 @@ class XtreamClient:
 
         return result
 
+    def get_live_streams_multi(self, category_ids: List[str]) -> List[Dict[str, Any]]:
+        results: List[Dict[str, Any]] = []
+        for cid in category_ids:
+            results.extend(self.get_live_streams(cid))
+        return results
+
+    def get_vod_streams_multi(self, category_ids: List[str]) -> List[Dict[str, Any]]:
+        results: List[Dict[str, Any]] = []
+        for cid in category_ids:
+            results.extend(self.get_vod_streams(cid))
+        return results
+
+    def get_series_multi(self, category_ids: List[str]) -> List[Dict[str, Any]]:
+        results: List[Dict[str, Any]] = []
+        for cid in category_ids:
+            results.extend(self.get_series(cid))
+        return results
+
     def get_series_info(self, series_id: Any) -> Dict[str, Any]:
         data = self._player_api("get_series_info", series_id=series_id) or {}
         if not isinstance(data, dict):
@@ -322,6 +340,14 @@ class XtreamClient:
             "info": info,
             "episodes": normalized_episodes,
             "raw": data,
+        }
+
+    def get_category_items(self, category_ids: List[str]) -> Dict[str, Any]:
+        category_ids = [str(x).strip() for x in category_ids if str(x).strip()]
+        return {
+            "livetv_items": self.get_live_streams_multi(category_ids),
+            "movie_items": self.get_vod_streams_multi(category_ids),
+            "series_items": self.get_series_multi(category_ids),
         }
 
     def load_catalog(self) -> Dict[str, Any]:

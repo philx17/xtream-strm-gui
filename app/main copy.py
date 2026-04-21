@@ -1,17 +1,14 @@
-from fastapi import FastAPI, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.templating import Jinja2Templates
-from starlette.middleware.sessions import SessionMiddleware
 
 from pathlib import Path
 from typing import Any, Dict, List
 import threading
 import traceback
 import time
-import os
-import secrets
 from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -20,7 +17,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from .xtream_api import XtreamClient
 from .jellyfin_api import JellyfinClient
-from .proxy_core import handle_player_api, handle_movie_stream, handle_series_stream, _is_local_request
+from .proxy_core import handle_player_api
 from .export_core import run_export_job, reset_generated_output, ExportCancelled
 from .state_core import (
     ensure_storage,
@@ -41,18 +38,7 @@ APP_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = APP_DIR / "templates"
 STATIC_DIR = APP_DIR / "static"
 
-GUI_USERNAME = os.getenv("GUI_USERNAME", "admin")
-GUI_PASSWORD = os.getenv("GUI_PASSWORD", "admin123")
-SESSION_SECRET = os.getenv("GUI_SESSION_SECRET", "change-this-session-secret-please")
-
 app = FastAPI(title="xtream-strm-gui")
-app.add_middleware(
-    SessionMiddleware,
-    secret_key=SESSION_SECRET,
-    session_cookie="xtream_gui_session",
-    same_site="lax",
-    https_only=False,
-)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -291,141 +277,61 @@ def _set_cached_items(cache_key: str, items: List[Dict[str, Any]]):
         }
 
 
-def _is_logged_in(request: Request) -> bool:
-    return bool(request.session.get("gui_authenticated") is True)
-
-
-def _require_local(request: Request):
-    if not _is_local_request(request):
-        raise HTTPException(status_code=403, detail="GUI ist nur aus dem lokalen Netzwerk erreichbar.")
-
-
-def _require_gui_access(request: Request):
-    _require_local(request)
-    if not _is_logged_in(request):
-        raise HTTPException(status_code=401, detail="Nicht eingeloggt.")
-
-
-@app.middleware("http")
-async def gui_security_middleware(request: Request, call_next):
-    path = request.url.path
-
-    if path.startswith("/proxy"):
-        return await call_next(request)
-
-    if path.startswith("/static"):
-        return await call_next(request)
-
-    if path in {"/login", "/logout"}:
-        _require_local(request)
-        return await call_next(request)
-
-    if path == "/" or path.startswith("/api/"):
-        _require_local(request)
-        if not _is_logged_in(request):
-            if path == "/":
-                return RedirectResponse(url="/login", status_code=303)
-            return JSONResponse({"ok": False, "error": "Nicht eingeloggt."}, status_code=401)
-
-    return await call_next(request)
-
-
 _apply_scheduler_from_runtime()
-
-
-@app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
-    if _is_logged_in(request):
-        return RedirectResponse(url="/", status_code=303)
-    return templates.TemplateResponse("login.html", {"request": request, "error": None})
-
-
-@app.post("/login", response_class=HTMLResponse)
-async def login_submit(
-    request: Request,
-    username: str = Form(...),
-    password: str = Form(...),
-):
-    if not secrets.compare_digest(username, GUI_USERNAME) or not secrets.compare_digest(password, GUI_PASSWORD):
-        return templates.TemplateResponse(
-            "login.html",
-            {"request": request, "error": "Benutzername oder Passwort ist falsch."},
-            status_code=401,
-        )
-
-    request.session["gui_authenticated"] = True
-    request.session["gui_login_at"] = datetime.now().isoformat()
-    return RedirectResponse(url="/", status_code=303)
-
-
-@app.get("/logout")
-async def logout(request: Request):
-    request.session.clear()
-    return RedirectResponse(url="/login", status_code=303)
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    _require_gui_access(request)
     return templates.TemplateResponse("index.html", {"request": request})
 
 
 @app.get("/api/status")
-async def api_status(request: Request):
-    _require_gui_access(request)
+async def api_status():
     return JSONResponse(get_job_status())
 
 
 @app.get("/api/report")
-async def api_report(request: Request):
-    _require_gui_access(request)
+async def api_report():
     return JSONResponse(get_last_report())
 
 
 @app.post("/api/report/clear")
-async def api_report_clear(request: Request):
-    _require_gui_access(request)
+async def api_report_clear():
     clear_last_report()
     return JSONResponse({"ok": True})
 
 
 @app.get("/api/runtime-config")
-async def api_runtime_config(request: Request):
-    _require_gui_access(request)
+async def api_runtime_config():
     return JSONResponse(load_runtime_config())
 
 
 @app.post("/api/runtime-config")
-async def api_save_runtime_config(request: Request, payload: Dict[str, Any]):
-    _require_gui_access(request)
+async def api_save_runtime_config(payload: Dict[str, Any]):
     save_runtime_config(payload)
     _apply_scheduler_from_runtime()
     return JSONResponse({"ok": True})
 
 
 @app.get("/api/profiles")
-async def api_profiles(request: Request):
-    _require_gui_access(request)
+async def api_profiles():
     return JSONResponse({"profiles": get_profiles()})
 
 
 @app.post("/api/profiles/save")
-async def api_profiles_save(request: Request, payload: ProfilePayload):
-    _require_gui_access(request)
+async def api_profiles_save(payload: ProfilePayload):
     save_profile(payload.name, payload.config)
     return JSONResponse({"ok": True, "name": payload.name})
 
 
 @app.post("/api/profiles/delete")
-async def api_profiles_delete(request: Request, payload: DeleteProfilePayload):
-    _require_gui_access(request)
+async def api_profiles_delete(payload: DeleteProfilePayload):
     delete_profile(payload.name)
     return JSONResponse({"ok": True, "name": payload.name})
 
 
 @app.post("/api/test-connection")
-async def api_test_connection(request: Request, payload: ConnectionPayload):
-    _require_gui_access(request)
+async def api_test_connection(payload: ConnectionPayload):
     try:
         client = XtreamClient(payload.base_url, payload.username, payload.password)
         account = client.get_account_info()
@@ -435,8 +341,7 @@ async def api_test_connection(request: Request, payload: ConnectionPayload):
 
 
 @app.post("/api/load-catalog")
-async def api_load_catalog(request: Request, payload: ConnectionPayload):
-    _require_gui_access(request)
+async def api_load_catalog(payload: ConnectionPayload):
     try:
         client = XtreamClient(payload.base_url, payload.username, payload.password)
         catalog = client.load_catalog()
@@ -447,8 +352,7 @@ async def api_load_catalog(request: Request, payload: ConnectionPayload):
 
 
 @app.post("/api/load-items")
-async def api_load_items(request: Request, payload: LoadItemsPayload):
-    _require_gui_access(request)
+async def api_load_items(payload: LoadItemsPayload):
     try:
         connection = payload.connection or {}
         item_type = str(payload.item_type or "").strip().lower()
@@ -482,8 +386,7 @@ async def api_load_items(request: Request, payload: LoadItemsPayload):
 
 
 @app.post("/api/proxy/test-jellyfin")
-async def api_proxy_test_jellyfin(request: Request, payload: JellyfinConnectionPayload):
-    _require_gui_access(request)
+async def api_proxy_test_jellyfin(payload: JellyfinConnectionPayload):
     try:
         client = JellyfinClient(payload.base_url, payload.api_key)
         info = client.test_connection()
@@ -493,8 +396,7 @@ async def api_proxy_test_jellyfin(request: Request, payload: JellyfinConnectionP
 
 
 @app.post("/api/proxy/libraries")
-async def api_proxy_libraries(request: Request, payload: JellyfinConnectionPayload):
-    _require_gui_access(request)
+async def api_proxy_libraries(payload: JellyfinConnectionPayload):
     try:
         client = JellyfinClient(payload.base_url, payload.api_key)
         libs = client.get_libraries()
@@ -504,8 +406,7 @@ async def api_proxy_libraries(request: Request, payload: JellyfinConnectionPaylo
 
 
 @app.get("/api/schedule")
-async def api_schedule_get(request: Request):
-    _require_gui_access(request)
+async def api_schedule_get():
     runtime_cfg = load_runtime_config()
     schedule_cfg = _normalize_schedule(runtime_cfg.get("schedule", {}))
     job = SCHEDULER.get_job("xtream_auto_export")
@@ -521,8 +422,7 @@ async def api_schedule_get(request: Request):
 
 
 @app.post("/api/schedule/save")
-async def api_schedule_save(request: Request, payload: SchedulePayload):
-    _require_gui_access(request)
+async def api_schedule_save(payload: SchedulePayload):
     runtime_cfg = load_runtime_config()
     if not isinstance(runtime_cfg, dict):
         runtime_cfg = {}
@@ -542,8 +442,7 @@ async def api_schedule_save(request: Request, payload: SchedulePayload):
 
 
 @app.post("/api/schedule/run-now")
-async def api_schedule_run_now(request: Request):
-    _require_gui_access(request)
+async def api_schedule_run_now():
     config = _resolve_scheduled_profile_config()
     if not config:
         return JSONResponse(
@@ -561,8 +460,7 @@ async def api_schedule_run_now(request: Request):
 
 
 @app.post("/api/export/start")
-async def api_export_start(request: Request, payload: ExportPayload):
-    _require_gui_access(request)
+async def api_export_start(payload: ExportPayload):
     cfg = payload.config or {}
     if not isinstance(cfg, dict):
         cfg = {}
@@ -575,8 +473,7 @@ async def api_export_start(request: Request, payload: ExportPayload):
 
 
 @app.post("/api/export/cancel")
-async def api_export_cancel(request: Request):
-    _require_gui_access(request)
+async def api_export_cancel():
     status = get_job_status()
     if not status.get("running"):
         return JSONResponse({"ok": False, "error": "Aktuell läuft kein Export."}, status_code=409)
@@ -592,8 +489,7 @@ async def api_export_cancel(request: Request):
 
 
 @app.post("/api/output/reset")
-async def api_output_reset(request: Request, payload: ResetPayload):
-    _require_gui_access(request)
+async def api_output_reset(payload: ResetPayload):
     try:
         result = reset_generated_output(
             config=payload.config or {},
@@ -603,8 +499,33 @@ async def api_output_reset(request: Request, payload: ResetPayload):
     except Exception as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
 
+def check_auth(username: str, password: str) -> bool:
+    return (
+        username == "jellyfinPS" and
+        password == "qaywsxedc"
+    )
+
+@app.get("/proxy/get.php")
+@app.get("/get.php")
+async def get_php(
+    request: Request,
+    username: str,
+    password: str,
+    type: str | None = None,
+    output: str | None = None
+):
+    if not check_auth(username, password):
+        return PlainTextResponse("", status_code=401)
+
+    return PlainTextResponse(
+        "#EXTM3U\n",
+        media_type="audio/x-mpegurl"
+    )
 
 @app.get("/proxy/player_api.php")
+@app.get("/player_api.php")
+@app.get("/proxy/panel_api.php")
+@app.get("/panel_api.php")
 async def proxy_player_api(
     request: Request,
     username: str = "",
@@ -623,30 +544,6 @@ async def proxy_player_api(
         category_id=category_id,
         series_id=series_id,
     )
-
-
-@app.get("/proxy/movie/{username}/{password}/{item_id}.{ext}")
-async def proxy_movie_stream(
-    request: Request,
-    username: str,
-    password: str,
-    item_id: str,
-    ext: str,
-):
-    runtime_cfg = load_runtime_config()
-    return handle_movie_stream(runtime_cfg, request, username, password, item_id, ext)
-
-
-@app.get("/proxy/series/{username}/{password}/{item_id}.{ext}")
-async def proxy_series_stream(
-    request: Request,
-    username: str,
-    password: str,
-    item_id: str,
-    ext: str,
-):
-    runtime_cfg = load_runtime_config()
-    return handle_series_stream(runtime_cfg, request, username, password, item_id, ext)
 
 
 if __name__ == "__main__":
