@@ -1,240 +1,220 @@
-# 📺 xtream-strm-gui
+# xtream-strm-gui
 
-Ein kombiniertes Tool für zwei zentrale Anwendungsfälle im IPTV/Jellyfin Umfeld.
+<p align="center">
+  <img src="assets/banner.svg" alt="xtream-strm-gui Banner" width="100%">
+</p>
+
+<p align="center">
+  <b>Xtream Proxy for Jellyfin + STRM Export Tool for Jellyfin Libraries</b>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Jellyfin-Integration-6C5CE7?style=for-the-badge&logo=jellyfin&logoColor=white" alt="Jellyfin">
+  <img src="https://img.shields.io/badge/Xtream-Proxy-1E90FF?style=for-the-badge" alt="Xtream Proxy">
+  <img src="https://img.shields.io/badge/XMLTV-EPG-orange?style=for-the-badge" alt="XMLTV">
+  <img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
+</p>
 
 ---
 
-## 🔥 Zwei Kernfunktionen der Anwendung
+## What this project does
 
-### 🧩 1. Xtream Proxy für Jellyfin
+`xtream-strm-gui` combines **two main functions** in one application:
 
-Die Anwendung fungiert als Xtream API Server, der Inhalte aus Jellyfin bereitstellt.
+### 1. Xtream Proxy for Jellyfin
 
-**Ziel:**
-- Nutzung von IPTV Apps (z. B. UHF, Tivimate, IPTV Smarters)
-- Zugriff auf Jellyfin Inhalte über Xtream API
+The application can act as an **Xtream API server** that exposes content from Jellyfin to IPTV apps.
 
-**Funktionsweise:**
+Typical use case:
 
+- connect an IPTV app like **UHF**, **TiviMate**, **IPTV Smarters**, etc.
+- use Jellyfin libraries as a source
+- provide:
+  - Live TV
+  - Movies (VOD)
+  - Series
+- automatic stream URL selection for:
+  - local network
+  - external / WAN access
+- XMLTV / EPG support
+
+Flow:
+
+```text
 IPTV App → xtream-strm-gui (/proxy) → Jellyfin → Stream
-
-**Features:**
-- Auswahl bestimmter Jellyfin Bibliotheken
-- Ausgabe als:
-  - LiveTV
-  - Filme (VOD)
-  - Serien
-- Automatische Stream-URLs (lokal / extern)
-- XMLTV / EPG Unterstützung
+```
 
 ---
 
-### 📦 2. STRM Export Tool (Xtream → Jellyfin)
+### 2. STRM Export Tool for Jellyfin
 
-Die Anwendung kann Inhalte aus einer Xtream API importieren und als .strm Struktur für Jellyfin exportieren.
+The application can also connect to an **Xtream API source** and export content into a Jellyfin-friendly structure.
 
-**Ziel:**
-- IPTV Inhalte dauerhaft in Jellyfin einbinden
-- Saubere Bibliotheksstruktur erzeugen
+Typical use case:
 
-**Funktionsweise:**
+- import movies and series from an Xtream provider
+- generate `.strm` files
+- save them into your desired folder structure
+- add the generated folders to Jellyfin as normal libraries
+- export Live TV as an `.m3u` file for Jellyfin Live TV integration
 
-Xtream API → xtream-strm-gui → STRM Files → Jellyfin Bibliothek
+Flow:
 
-**Exportierte Inhalte:**
-- 🎬 Filme → `.strm`
-- 📺 Serien → Staffel/Episoden Struktur
-- 📡 LiveTV → `.m3u` Datei
-
----
-
-## 🎯 Zusammenspiel beider Funktionen
-
-| Funktion       | Richtung                     | Zweck                    |
-|----------------|----------------------------|-------------------------|
-| Xtream Proxy   | Jellyfin → IPTV App        | Streaming               |
-| STRM Export    | Xtream → Jellyfin          | Bibliothek aufbauen     |
+```text
+Xtream API → xtream-strm-gui → STRM / M3U Export → Jellyfin Library
+```
 
 ---
 
-## 🚀 Features
+## Core features
 
-- Xtream API Integration (LiveTV / VOD / Series)
-- Jellyfin Integration
-- STRM Export:
-  - Filme
-  - Serien (inkl. Episodenstruktur)
-- LiveTV Export als M3U
-- Xtream Proxy API
-- XMLTV / EPG Support
-- Scheduler (Automatisierung)
-- Profile-System
-- Web GUI
-
----
-
-## ⚙️ Konfiguration & Nutzung
+- Xtream API integration
+- Jellyfin integration
+- Xtream proxy for Jellyfin content
+- STRM export for movies
+- STRM export for series with season / episode structure
+- Live TV export as M3U
+- XMLTV / EPG support
+- profile system
+- scheduler / automatic exports
+- web GUI
+- health endpoint
+- proxy / scheduler / export status overview
 
 ---
 
-### 🔹 Funktion 1: Xtream Proxy (Jellyfin → IPTV)
+## Function 1: Xtream Proxy (Jellyfin → IPTV App)
 
-#### 📚 Bibliotheken auswählen
+### What it does
 
-In der GUI:
+This mode exposes selected Jellyfin libraries through an Xtream-compatible API.
 
-Proxy → Bibliotheken laden
+### You can choose
 
-Dann auswählen:
-- Filme Bibliotheken
-- Serien Bibliotheken
+In the GUI, you can select **which Jellyfin libraries** should be offered through the Xtream proxy.
 
-Diese werden über Xtream bereitgestellt.
+Examples:
 
----
+- only Movies
+- only Series
+- Movies + Series
+- selected libraries only
 
-#### 📡 Zugriff aus IPTV App
+### Proxy endpoints
 
-Server URL:
+Main Xtream endpoint:
+
+```text
 http://<host>:8787/proxy/player_api.php
+```
 
-Username / Passwort:
-→ aus GUI (Proxy Einstellungen)
+Streams:
 
----
-
-#### 📺 Streams
-
-LiveTV:
+```text
+Live TV:
 /proxy/live/{username}/{password}/{id}.ts
 
-Filme:
+Movies:
 /proxy/movie/{username}/{password}/{id}.mp4
 
-Serien:
+Series:
 /proxy/series/{username}/{password}/{id}.mp4
+```
+
+### EPG / XMLTV
+
+```text
+http://<host>:8787/xmltv.php
+```
+
+or
+
+```text
+http://<host>:8787/proxy/xmltv.php
+```
 
 ---
 
-### 🔹 Funktion 2: STRM Export (Xtream → Jellyfin)
+## Function 2: STRM Export Tool (Xtream → Jellyfin)
 
-#### 📥 Quelle konfigurieren
+### What it does
 
-- Xtream Server URL
-- Username
-- Passwort
+This mode pulls content from an Xtream source and writes it to disk in a format that Jellyfin can index.
 
----
+### You can choose
 
-#### 🎯 Auswahl treffen
+In the GUI, you can select exactly what should be imported from the Xtream source:
 
-Kategorien auswählen:
-- LiveTV Kategorien
-- Movie Kategorien
-- Serien Kategorien
+- Live TV categories
+- Movie categories
+- Series categories
+- individual exclusions
 
-Optional:
-- Einzelne Inhalte ausschließen
+### Export result
 
----
+- **Movies** → `.strm` files
+- **Series** → series / season / episode `.strm` structure
+- **Live TV** → `.m3u` file for Jellyfin Live TV integration
 
-#### 📁 Output Struktur
+Example structure:
 
-Beispiel:
-
-   /output/
+```text
+/output/
 ├── Movies/
-│   └── Filmname (Jahr)/
-│       └── Filmname.strm
+│   └── Movie Name (Year)/
+│       └── Movie Name.strm
 ├── Series/
-│   └── Serienname/
+│   └── Show Name/
 │       └── Season 01/
 │           └── S01E01.strm
 └── livetv.m3u
-
-------------------------------------------------------------------------
+```
 
 ---
 
-#### 📡 LiveTV Integration in Jellyfin
+## Live TV in Jellyfin
 
-LiveTV wird als M3U erzeugt:
+Live TV is exported as an `.m3u` file.
 
+Example:
+
+```text
 /output/livetv.m3u
+```
 
-Einbindung in Jellyfin:
-- Live TV → Tuner → M3U hinzufügen
+You can then add it in Jellyfin via:
 
----
-
-## 🌐 Endpunkte
-
-### GUI
-
-http://<host>:8787/
+- **Dashboard**
+- **Live TV**
+- **Tuners**
+- add **M3U tuner**
 
 ---
 
-### Xtream Proxy
+## Health endpoint
 
-http://<host>:8787/proxy/player_api.php
+The application provides a health endpoint:
 
----
-
-### XMLTV / EPG
-
-http://<host>:8787/xmltv.php
-
----
-
-### Healthcheck
-
+```text
 http://<host>:8787/healthz
+```
+
+It can be used to check:
+
+- whether the server is alive
+- since when the server is running
+- whether proxy configuration is complete
+- whether a scheduler is enabled
+- next scheduled run
+- whether an export is currently running
+- export phase and status
 
 ---
 
-## 🧠 Funktionsweise im Detail
+## Project structure
 
----
-
-### 📡 Proxy Flow
-
-IPTV App  
-↓  
-/proxy/player_api.php  
-↓  
-Jellyfin API  
-↓  
-Stream URL  
-
----
-
-### 📦 Export Flow
-
-Xtream API  
-↓  
-Kategorien laden  
-↓  
-Items filtern  
-↓  
-STRM / M3U erzeugen  
-↓  
-Jellyfin scannt Bibliothek  
-
----
-
-### 📊 EPG Flow
-
-IPTV App  
-↓  
-/xmltv.php  
-↓  
-Tvheadend XMLTV  
-
----
-
-## 📦 Projektstruktur
-
+```text
 app/
 ├── main.py
 ├── xtream_api.py
@@ -247,89 +227,202 @@ app/
 │   └── login.html
 ├── static/
 │   ├── css/
-│   ├── js/
-│   │   ├── main.js
-│   │   ├── api.js
-│   │   ├── ui.js
-│   │   ├── proxy.js
-│   │   ├── export.js
-│   │   └── schedule.js
+│   └── js/
+│       ├── state.js
+│       ├── utils.js
+│       ├── api.js
+│       ├── render.js
+│       ├── actions.js
+│       └── init.js
+```
 
 ---
 
-## 📁 Benötigte Dateien
+## Required files
 
 ### Backend
 
-- main.py
-- xtream_api.py
-- jellyfin_api.py
-- proxy_core.py
-- export_core.py
-- state_core.py
+- `main.py`
+- `xtream_api.py`
+- `jellyfin_api.py`
+- `proxy_core.py`
+- `export_core.py`
+- `state_core.py`
+
+### Templates
+
+- `templates/index.html`
+- `templates/login.html`
+
+### Frontend JavaScript
+
+- `static/js/state.js`
+- `static/js/utils.js`
+- `static/js/api.js`
+- `static/js/render.js`
+- `static/js/actions.js`
+- `static/js/init.js`
+
+### Optional / recommended
+
+- `Dockerfile`
+- `requirements.txt`
+- `.env`
+- `docker-compose.yml`
 
 ---
 
-### Frontend
+## Configuration overview
 
-- templates/index.html
-- templates/login.html
+### Xtream source connection
 
-JS:
-- main.js
-- api.js
-- ui.js
-- proxy.js
-- export.js
-- schedule.js
+- base URL
+- username
+- password
 
----
+### Export output
 
-## 🔐 Sicherheit
+- root output directory
+- movie directory
+- series directory
+- Live TV M3U filename
 
-- GUI nur im lokalen Netzwerk erreichbar
-- Proxy öffentlich nutzbar
-- Login-System für GUI
-- Jellyfin API Key geschützt
+### Selection
 
-Empfohlen:
-- Reverse Proxy (NGINX)
-- HTTPS
-- Rate Limiting / IP Ban
+- selected Live TV categories
+- selected movie categories
+- selected series categories
+- excluded items
+- selected Jellyfin proxy libraries
 
----
+### Sync
 
-## 🧪 Debug / Testing
+- delete removed files
 
-curl http://localhost:8787/healthz
-curl “http://host:8787/proxy/player_api.php?username=xxx&password=xxx&action=get_live_streams”
----
+### Scheduler
 
-## 🐳 Docker
-docker run -d 
--p 8787:8787 
--v /mnt/user/appdata/xtream:/data 
-xtream-strm-gui
+- enabled / disabled
+- daily / weekly / interval mode
+- execution time
+- weekday
+- interval days
+- profile binding
 
----
+### Proxy
 
-## 💡 Roadmap
-
-- EPG Mapping verbessern
-- Multi-User Proxy
-- Rate Limiting + Ban
-- Websocket Logs
-- Backup / Restore
+- Jellyfin local base URL
+- Jellyfin external base URL
+- Jellyfin API key
+- proxy username
+- proxy password
+- XMLTV URL
 
 ---
 
-## ❤️ Fazit
+## Screenshots
 
-Dieses Projekt vereint:
+> Replace these placeholders with real screenshots from your installation.
 
-- Xtream Proxy  
-- Jellyfin Bridge  
-- STRM Generator  
-- IPTV Backend  
+### Dashboard
 
-in einer einzigen Anwendung.
+![Dashboard](docs/screenshots/dashboard-placeholder.svg)
+
+### Proxy configuration
+
+![Proxy Configuration](docs/screenshots/proxy-placeholder.svg)
+
+### Export / selection view
+
+![Export Selection](docs/screenshots/export-placeholder.svg)
+
+### Scheduler / automation
+
+![Scheduler](docs/screenshots/scheduler-placeholder.svg)
+
+---
+
+## Docker example
+
+```bash
+docker run -d \
+  --name xtream-strm-gui \
+  -p 8787:8787 \
+  -v /mnt/user/appdata/xtream-strm-gui:/data \
+  xtream-strm-gui
+```
+
+---
+
+## Security notes
+
+- GUI can be restricted to the local network
+- GUI login supported
+- proxy credentials separated from GUI login
+- Jellyfin API key required
+- IP ban / rate-limit logic can be added for failed login attempts
+
+Recommended:
+
+- run behind a reverse proxy
+- enable HTTPS
+- use strong GUI and proxy credentials
+
+---
+
+## Quick test commands
+
+### Health
+
+```bash
+curl -s http://<host>:8787/healthz
+```
+
+### Xtream account info
+
+```bash
+curl -s "http://<host>:8787/proxy/player_api.php?username=USER&password=PASS"
+```
+
+### Live categories
+
+```bash
+curl -s "http://<host>:8787/proxy/player_api.php?username=USER&password=PASS&action=get_live_categories"
+```
+
+### Movie categories
+
+```bash
+curl -s "http://<host>:8787/proxy/player_api.php?username=USER&password=PASS&action=get_vod_categories"
+```
+
+### Series categories
+
+```bash
+curl -s "http://<host>:8787/proxy/player_api.php?username=USER&password=PASS&action=get_series_categories"
+```
+
+---
+
+## Roadmap ideas
+
+- better EPG channel mapping
+- advanced health checks
+- proxy statistics
+- backup / restore for profiles and config
+- improved live logs in GUI
+- reverse proxy examples
+- GitHub Actions / GHCR publishing
+
+---
+
+## Summary
+
+`xtream-strm-gui` combines:
+
+- an **Xtream proxy for Jellyfin**
+- a **STRM export tool for Xtream sources**
+- a **Live TV M3U export for Jellyfin**
+- **XMLTV / EPG support**
+- a **scheduler and web GUI**
+
+in a single application.
