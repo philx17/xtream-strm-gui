@@ -58,6 +58,7 @@ Typical use case:
 - save them into your desired folder structure
 - add the generated folders to Jellyfin as normal libraries
 - export Live TV as an `.m3u` file for Jellyfin Live TV integration
+  
 
 Flow:
 
@@ -321,23 +322,21 @@ app/
 
 ## Screenshots
 
-> Replace these placeholders with real screenshots from your installation.
-
 ### Dashboard
 
-![Dashboard](docs/screenshots/dashboard-placeholder.svg)
+![Dashboard](docs/screenshots/dashboard.tiff)
 
 ### Proxy configuration
 
-![Proxy Configuration](docs/screenshots/proxy-placeholder.svg)
+![Proxy Configuration](docs/screenshots/proxy.tiff)
 
 ### Export / selection view
 
-![Export Selection](docs/screenshots/export-placeholder.svg)
+![Export Selection](docs/screenshots/export.tiff)
 
 ### Scheduler / automation
 
-![Scheduler](docs/screenshots/scheduler-placeholder.svg)
+![Scheduler](docs/screenshots/scheduler.tiff)
 
 ---
 
