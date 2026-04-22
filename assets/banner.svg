@@ -1,0 +1,50 @@
+<svg width="1600" height="500" viewBox="0 0 1600 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#1E3A8A"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="280" y1="120" x2="1310" y2="380" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE"/>
+      <stop offset="0.5" stop-color="#A855F7"/>
+      <stop offset="1" stop-color="#10B981"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="1600" height="500" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="20" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="500" rx="32" fill="url(#bg)"/>
+  <circle cx="1370" cy="100" r="180" fill="#22D3EE" fill-opacity="0.08"/>
+  <circle cx="1240" cy="390" r="220" fill="#A855F7" fill-opacity="0.07"/>
+  <circle cx="170" cy="70" r="130" fill="#10B981" fill-opacity="0.07"/>
+
+  <g filter="url(#shadow)">
+    <rect x="78" y="120" width="160" height="160" rx="32" fill="#111827" stroke="#334155" stroke-width="2"/>
+    <path d="M128 178C128 169.716 134.716 163 143 163H175C183.284 163 190 169.716 190 178V222C190 230.284 183.284 237 175 237H143C134.716 237 128 230.284 128 222V178Z" fill="url(#accent)"/>
+    <path d="M191 190L236 170V230L191 210V190Z" fill="#E5E7EB" fill-opacity="0.95"/>
+  </g>
+
+  <text x="290" y="185" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="64" font-weight="700">xtream-strm-gui</text>
+  <text x="292" y="235" fill="#CBD5E1" font-family="Arial, Helvetica, sans-serif" font-size="24">Xtream Proxy for Jellyfin • STRM Export Tool • LiveTV M3U • XMLTV / EPG</text>
+
+  <g>
+    <rect x="292" y="282" width="220" height="48" rx="24" fill="#0EA5E9" fill-opacity="0.18" stroke="#38BDF8"/>
+    <text x="322" y="313" fill="#E0F2FE" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="600">Jellyfin Proxy</text>
+
+    <rect x="530" y="282" width="215" height="48" rx="24" fill="#8B5CF6" fill-opacity="0.18" stroke="#C084FC"/>
+    <text x="560" y="313" fill="#F3E8FF" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="600">STRM Export</text>
+
+    <rect x="763" y="282" width="180" height="48" rx="24" fill="#10B981" fill-opacity="0.18" stroke="#34D399"/>
+    <text x="798" y="313" fill="#D1FAE5" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="600">XMLTV / EPG</text>
+  </g>
+
+  <g opacity="0.95">
+    <rect x="1120" y="160" width="320" height="190" rx="24" fill="#0B1220" stroke="#334155"/>
+    <rect x="1150" y="195" width="120" height="14" rx="7" fill="#22D3EE"/>
+    <rect x="1150" y="225" width="220" height="12" rx="6" fill="#334155"/>
+    <rect x="1150" y="250" width="190" height="12" rx="6" fill="#334155"/>
+    <rect x="1150" y="287" width="110" height="34" rx="17" fill="#10B981" fill-opacity="0.22" stroke="#34D399"/>
+    <text x="1180" y="309" fill="#D1FAE5" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">HEALTH OK</text>
+  </g>
+</svg>
