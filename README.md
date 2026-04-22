@@ -309,6 +309,41 @@ app/
 - interval days
 - profile binding
 
+---
+
+### 📊 Status & Live Monitoring
+
+During export, the GUI shows:
+- Current phase
+- Progress bar
+- Status messages
+- Live logs
+
+---
+
+### 📋 Report & Summary
+
+After each export:
+- Selected categories
+- Number of:
+  - LiveTV channels
+  - Movies
+  - Series
+  - Episodes
+- Excluded items
+- Written files
+- Deleted files
+
+---
+
+### 🔄 Change Tracking
+
+Displays:
+- Newly added content
+- Removed content
+
+---
+
 ### Proxy
 
 - Jellyfin local base URL
