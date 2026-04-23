@@ -359,19 +359,19 @@ Displays:
 
 ### Dashboard
 
-![Dashboard](docs/screenshots/dashboard.tiff)
+![Dashboard](docs/screenshots/dashboard.png)
 
 ### Proxy configuration
 
-![Proxy Configuration](docs/screenshots/proxy.tiff)
+![Proxy Configuration](docs/screenshots/proxy.png)
 
 ### Export / selection view
 
-![Export Selection](docs/screenshots/export.tiff)
+![Export Selection](docs/screenshots/export.png)
 
 ### Scheduler / automation
 
-![Scheduler](docs/screenshots/scheduler.tiff)
+![Scheduler](docs/screenshots/scheduler.png)
 
 ---
 
