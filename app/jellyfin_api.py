@@ -113,7 +113,7 @@ class JellyfinClient:
                 ParentId=parent_id,
                 Recursive=str(bool(recursive)).lower(),
                 IncludeItemTypes=include_item_types,
-                Fields="Overview,PrimaryImageAspectRatio,ProviderIds,ProductionYear,PremiereDate,RunTimeTicks,Path",
+                Fields="Overview,PrimaryImageAspectRatio,ProviderIds,ProductionYear,PremiereDate,RunTimeTicks,Path,ChannelMappingInfo",
                 SortBy="SortName",
                 SortOrder="Ascending",
                 StartIndex=start_index,
@@ -144,13 +144,61 @@ class JellyfinClient:
             recursive=True,
         )
 
+    def get_live_channels(self) -> List[Dict[str, Any]]:
+        data = self._get(
+            "/LiveTv/Channels",
+            EnableUserData="false",
+            EnableImages="true",
+            Fields="ChannelMappingInfo",
+        )
+
+        items = data.get("Items", []) if isinstance(data, dict) else []
+        result: List[Dict[str, Any]] = []
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+
+            channel_id = str(item.get("Id") or "").strip()
+            if not channel_id:
+                continue
+
+            channel_number = item.get("ChannelNumber")
+            if channel_number in (None, ""):
+                channel_number = 0
+
+            tag_items = item.get("TagItems")
+            group_name = None
+            if isinstance(tag_items, list) and tag_items:
+                first_tag = tag_items[0]
+                if isinstance(first_tag, dict):
+                    group_name = first_tag.get("Name")
+
+            group_name = group_name or item.get("GroupName") or "LiveTV"
+
+            result.append({
+                "Id": channel_id,
+                "Name": item.get("Name") or "Unknown Channel",
+                "Number": channel_number,
+                "group_name": str(group_name).strip() or "LiveTV",
+                "epg_channel_id": str(item.get("ExternalId") or ""),
+                "raw": item,
+            })
+
+        return result
+
     def build_image_url(self, item_id: str, base_url_override: Optional[str] = None) -> str:
         if not item_id:
             return ""
         base = (base_url_override or self.base_url).rstrip("/")
         return f"{base}/Items/{item_id}/Images/Primary?api_key={self.api_key}"
 
-    def build_stream_url(self, item_id: str, container: str = "mp4", base_url_override: Optional[str] = None) -> str:
+    def build_stream_url(
+        self,
+        item_id: str,
+        container: str = "mp4",
+        base_url_override: Optional[str] = None,
+    ) -> str:
         item_id = str(item_id or "").strip()
         container = (container or "mp4").lstrip(".")
         if not item_id:
@@ -161,3 +209,18 @@ class JellyfinClient:
             "api_key": self.api_key,
         })
         return f"{base}/Videos/{item_id}/stream.{container}?{query}"
+
+    def build_live_stream_url(
+        self,
+        channel_id: str,
+        base_url_override: Optional[str] = None,
+    ) -> str:
+        channel_id = str(channel_id or "").strip()
+        if not channel_id:
+            return ""
+        base = (base_url_override or self.base_url).rstrip("/")
+        query = urlencode({
+            "static": "true",
+            "api_key": self.api_key,
+        })
+        return f"{base}/Videos/{channel_id}/stream?{query}"

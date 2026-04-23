@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00c6ff"/>
+      <stop offset="100%" stop-color="#0072ff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#0f172a"/>
+
+  <!-- Proxy / Network -->
+  <circle cx="20" cy="20" r="4" fill="#38bdf8"/>
+  <circle cx="44" cy="20" r="4" fill="#38bdf8"/>
+  <circle cx="32" cy="44" r="4" fill="#38bdf8"/>
+
+  <line x1="20" y1="20" x2="44" y2="20" stroke="#38bdf8" stroke-width="2"/>
+  <line x1="20" y1="20" x2="32" y2="44" stroke="#38bdf8" stroke-width="2"/>
+  <line x1="44" y1="20" x2="32" y2="44" stroke="#38bdf8" stroke-width="2"/>
+
+  <!-- Play icon -->
+  <polygon points="28,24 28,40 42,32" fill="url(#g)"/>
+</svg>
